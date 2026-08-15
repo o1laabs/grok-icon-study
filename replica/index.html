@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Character Engine Playground</title>
+<style>
+  :root {
+    --paper: #ece7dc;
+    --ink: #161513;
+    --mute: #6d675d;
+    --line: #d4cfc3;
+    --disk: #f3efe6;
+    --bg: #1a1916;
+    --panel: #22211d;
+    --accent: #e8d7a4;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--paper); }
+  body {
+    font: 14px/1.5 "SF Pro Text", "PingFang SC", "Hiragino Sans GB", sans-serif;
+    letter-spacing: 0.01em;
+  }
+  header {
+    padding: 28px 32px 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 560;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  header p { margin: 0; color: var(--mute); font-size: 12px; }
+  main {
+    display: grid;
+    grid-template-columns: minmax(280px, 420px) 1fr;
+    gap: 28px;
+    padding: 12px 32px 48px;
+    align-items: start;
+  }
+  .stage {
+    position: sticky;
+    top: 20px;
+    background: var(--panel);
+    border: 1px solid #2e2c27;
+    border-radius: 20px;
+    padding: 28px 24px 20px;
+  }
+  .disk {
+    width: min(100%, 280px);
+    aspect-ratio: 1;
+    margin: 0 auto;
+    border-radius: 50%;
+    background: var(--disk);
+    display: grid;
+    place-items: center;
+    box-shadow: inset 0 -18px 40px rgba(40, 30, 10, 0.08), 0 24px 60px rgba(0,0,0,.35);
+  }
+  .disk svg { width: 68%; height: 68%; overflow: visible; color-scheme: light; --bg: var(--disk); --fg: #111; }
+  .stage-disks { display: flex; align-items: flex-end; justify-content: center; gap: 28px; }
+  .disk-login {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background: var(--disk);
+    display: grid;
+    place-items: center;
+    box-shadow: inset 0 -8px 18px rgba(40, 30, 10, 0.08), 0 12px 28px rgba(0,0,0,.3);
+  }
+  .disk-login svg { width: 64px; height: 64px; overflow: visible; color-scheme: light; --bg: var(--disk); --fg: #111; }
+  .missing {
+    width: min(100%, 280px);
+    margin: 0 auto;
+    padding: 22px 18px;
+    border-radius: 16px;
+    background: #2a2823;
+    color: #d8d0c0;
+    font-size: 13px;
+  }
+  .missing strong { display: block; margin-bottom: 8px; color: var(--accent); font-weight: 560; }
+  .missing a { color: var(--accent); }
+  .readout {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 16px;
+    font-variant-numeric: tabular-nums;
+    color: #b7b1a4;
+    font-size: 12px;
+  }
+  .readout b { color: var(--paper); font-weight: 560; }
+  .modes { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  button {
+    appearance: none;
+    border: 1px solid #3a372f;
+    background: #2a2823;
+    color: var(--paper);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font: inherit;
+    cursor: pointer;
+  }
+  button[aria-pressed="true"] { background: var(--accent); color: #1a1916; border-color: var(--accent); }
+  button:hover { border-color: #6a6458; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  h2 {
+    margin: 0 0 10px;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--mute);
+    font-weight: 560;
+  }
+  section + section { margin-top: 22px; }
+  .states { display: flex; flex-wrap: wrap; gap: 6px; }
+  .states button { font-size: 12px; padding: 5px 10px; }
+  .shapes {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: 8px;
+  }
+  .shape {
+    background: #2a2823;
+    border: 1px solid #3a372f;
+    border-radius: 10px;
+    padding: 8px 6px 6px;
+    cursor: pointer;
+    color: inherit;
+    text-align: center;
+  }
+  .shape[aria-pressed="true"] { border-color: var(--accent); background: #353228; }
+  .shape svg { width: 48px; height: 48px; display: block; margin: 0 auto 4px; --fg: #efe8d8; --bg: #2a2823; }
+  .shape span { display: block; font-size: 10px; color: #b7b1a4; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+  .swatch {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 2px solid #111; cursor: pointer; padding: 0;
+  }
+  .swatch[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .note {
+    color: #8d877b;
+    font-size: 12px;
+    max-width: 62ch;
+  }
+  .note code { color: #d8d0c0; font-size: 11px; }
+  [hidden] { display: none !important; }
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; }
+    .stage { position: static; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Character Engine</h1>
+  <p>非官方弹簧角色机芯 · 几何不随仓库分发</p>
+</header>
+<main>
+  <aside class="stage">
+    <div id="ready-stage">
+      <div class="stage-disks">
+        <div class="disk" id="disk">
+          <svg id="bot" role="img" aria-label="Character preview"></svg>
+        </div>
+        <div>
+          <div class="disk-login">
+            <svg id="bot64" role="img" aria-label="Login size 64px"></svg>
+          </div>
+          <span style="display:block;margin-top:8px;font-size:10px;color:#8d877b;text-align:center">登录 sizePx: 64</span>
+        </div>
+      </div>
+    </div>
+    <div class="missing" id="missing-geo" hidden>
+      <strong>几何未加载</strong>
+      本仓库不包含 <code>geometry-data.js</code>。把符合
+      <a href="geometry.schema.md">geometry.schema.md</a>
+      的数据放到同目录后刷新，即可本地预览。不要提交或再分发从商业应用抽出的造型。
+    </div>
+    <div class="modes">
+      <button id="mode-onboard" aria-pressed="true">登录轮换</button>
+      <button id="mode-hold" aria-pressed="false">锁定状态</button>
+    </div>
+    <div class="modes">
+      <button id="opt-follow" aria-pressed="true">跟随指针</button>
+      <button id="opt-emphasis" aria-pressed="false">emphasis</button>
+      <button id="act-spin">转一圈</button>
+      <button id="act-bounce">跳一下</button>
+      <button id="act-burst">粒子</button>
+    </div>
+    <div class="readout">
+      <div>状态 <b id="r-state">—</b></div>
+      <div>眼睛 <b id="r-eye">—</b></div>
+      <div>旋转 <b id="r-spin">—</b></div>
+      <div>挤压 <b id="r-squash">—</b></div>
+      <div>overlay <b id="r-ov">—</b></div>
+    </div>
+  </aside>
+  <div>
+    <section>
+      <h2>情绪状态 · 39 态</h2>
+      <div id="states"></div>
+    </section>
+    <section id="shapes-section" hidden>
+      <h2>身形</h2>
+      <div class="shapes" id="shapes"></div>
+    </section>
+    <section id="swatches-section" hidden>
+      <h2>墨色</h2>
+      <div class="swatches" id="swatches"></div>
+    </section>
+    <section>
+      <h2>这是机芯，不是素材包</h2>
+      <p class="note">
+        引擎拆在 <code>src/</code>：math / tables / pose / tricks / eyes / fx / character。
+        有几何时，右侧 64px 带登录包装；thinking / orbit / writing / loading 等会切 overlay。
+        首屏从 curious 起播，点「登录轮换」则按 onboarding 从 idle 重来。
+        大预览默认开指针跟随。
+      </p>
+    </section>
+  </div>
+</main>
+<script src="geometry-data.js"></script>
+<script src="src/math.js"></script>
+<script src="src/tables.js"></script>
+<script src="src/pose.js"></script>
+<script src="src/tricks.js"></script>
+<script src="src/fx.js"></script>
+<script src="src/eyes.js"></script>
+<script src="src/character.js"></script>
+<script>
+  function hasUsableGeo(geo) {
+    return !!(
+      geo &&
+      typeof geo.Re === "number" &&
+      Array.isArray(geo.eyes) &&
+      geo.eyes.length > 0 &&
+      geo.shapes &&
+      Object.keys(geo.shapes).length > 0
+    );
+  }
+
+  const ready = hasUsableGeo(window.GROK_GEO);
+  document.getElementById("missing-geo").hidden = ready;
+  document.getElementById("ready-stage").hidden = !ready;
+  document.querySelectorAll("#mode-onboard, #mode-hold, #opt-follow, #opt-emphasis, #act-spin, #act-bounce, #act-burst")
+    .forEach((el) => { el.disabled = !ready; });
+
+  const readout = {
+    state: document.getElementById("r-state"),
+    eye: document.getElementById("r-eye"),
+    spin: document.getElementById("r-spin"),
+    squash: document.getElementById("r-squash"),
+    ov: document.getElementById("r-ov"),
+  };
+  const stateRoot = document.getElementById("states");
+  function paintReadout(s) {
+    readout.state.textContent = s.state;
+    readout.eye.textContent = `${s.eyeFrom} → ${s.eyeTo}`;
+    readout.spin.textContent = `${s.spin.toFixed(2)}°`;
+    readout.squash.textContent = s.squash.toFixed(3);
+    if (readout.ov) readout.ov.textContent = s.overlay || "—";
+  }
+  function markState(name) {
+    stateRoot.querySelectorAll("button").forEach((b) => {
+      b.setAttribute("aria-pressed", b.dataset.state === name ? "true" : "false");
+    });
+  }
+  function syncModes(mode) {
+    document.getElementById("mode-onboard").setAttribute("aria-pressed", mode === "onboarding");
+    document.getElementById("mode-hold").setAttribute("aria-pressed", mode === "hold");
+  }
+
+  const groups = window.GROK_META?.groups || window.GROK_TABLES?.GROUPS || [];
+  groups.forEach((group) => {
+    const h = document.createElement("h2");
+    h.textContent = group.label;
+    h.style.marginTop = "8px";
+    stateRoot.appendChild(h);
+    const row = document.createElement("div");
+    row.className = "states";
+    group.states.forEach((name) => {
+      const b = document.createElement("button");
+      b.textContent = name;
+      b.dataset.state = name;
+      b.disabled = !ready;
+      b.addEventListener("click", () => {
+        if (!window.__bots) return;
+        window.__bots.forEach((el) => {
+          el.setMode("hold");
+          el.setState(name, { resetEyes: false });
+        });
+        syncModes("hold");
+      });
+      row.appendChild(b);
+    });
+    stateRoot.appendChild(row);
+  });
+
+  if (!ready) {
+    // Engine tables still render as documentation. Live character stays off.
+  } else {
+    const shared = { mode: "onboarding", shape: "blob", color: "black", scheme: "light", loginWrap: true };
+    const bot = new GrokCharacter(document.getElementById("bot"), {
+      ...shared,
+      followPointer: true,
+      onChange(snap) { paintReadout(snap); markState(snap.state); },
+    });
+    const bot64 = new GrokCharacter(document.getElementById("bot64"), { ...shared, sizePx: 64 });
+    const bots = [bot, bot64];
+    window.__bots = bots;
+    bots.forEach((el) => {
+      el.moodN = 1;
+      el.setState("curious", { resetEyes: true });
+    });
+    setInterval(() => paintReadout(bot.snapshot()), 80);
+
+    const shapeRoot = document.getElementById("shapes");
+    document.getElementById("shapes-section").hidden = false;
+    Object.entries(GROK_GEO.shapes).forEach(([id, shape]) => {
+      const b = document.createElement("button");
+      b.className = "shape";
+      b.dataset.shape = id;
+      b.innerHTML = `<svg viewBox="-15 -15 259 259"><path d="${shape.path}" style="fill:var(--fg)"></path></svg><span>${shape.label}</span>`;
+      b.addEventListener("click", () => {
+        bots.forEach((el) => el.setShape(id));
+        shapeRoot.querySelectorAll("button").forEach((el) => {
+          el.setAttribute("aria-pressed", el === b ? "true" : "false");
+        });
+      });
+      if (id === "blob") b.setAttribute("aria-pressed", "true");
+      shapeRoot.appendChild(b);
+    });
+
+    const swatchRoot = document.getElementById("swatches");
+    document.getElementById("swatches-section").hidden = false;
+    Object.entries(GROK_GEO.palette).forEach(([id, pal]) => {
+      const b = document.createElement("button");
+      b.className = "swatch";
+      b.title = id;
+      b.style.background = pal.light;
+      b.addEventListener("click", () => {
+        bots.forEach((el) => el.setColor(id, "light"));
+        swatchRoot.querySelectorAll("button").forEach((el) => {
+          el.setAttribute("aria-pressed", el === b ? "true" : "false");
+        });
+      });
+      if (id === "black") b.setAttribute("aria-pressed", "true");
+      swatchRoot.appendChild(b);
+    });
+  }
+
+  document.getElementById("mode-onboard").onclick = () => {
+    if (!window.__bots) return;
+    window.__bots.forEach((el) => el.setMode("onboarding"));
+    syncModes("onboarding");
+  };
+  document.getElementById("mode-hold").onclick = () => {
+    if (!window.__bots) return;
+    window.__bots.forEach((el) => el.setMode("hold"));
+    syncModes("hold");
+  };
+  document.getElementById("opt-follow").onclick = () => {
+    if (!window.__bots) return;
+    const on = document.getElementById("opt-follow").getAttribute("aria-pressed") !== "true";
+    document.getElementById("opt-follow").setAttribute("aria-pressed", on ? "true" : "false");
+    window.__bots.forEach((el) => el.setFollowPointer(on));
+  };
+  document.getElementById("opt-emphasis").onclick = () => {
+    if (!window.__bots) return;
+    const on = document.getElementById("opt-emphasis").getAttribute("aria-pressed") !== "true";
+    document.getElementById("opt-emphasis").setAttribute("aria-pressed", on ? "true" : "false");
+    window.__bots.forEach((el) => el.setEmphasis(on));
+  };
+  document.getElementById("act-spin").onclick = () => window.__bots?.forEach((el) => el.spinOnce(1));
+  document.getElementById("act-bounce").onclick = () => window.__bots?.forEach((el) => el.bounceOnce());
+  document.getElementById("act-burst").onclick = () => window.__bots?.forEach((el) => el.burstOnce());
+</script>
+</body>
+</html>
