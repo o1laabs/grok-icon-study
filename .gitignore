@@ -8,3 +8,6 @@ replica/grok-blob-idle.svg
 # Local snap output
 /tmp/
 snap-out/
+
+# Never commit unpacked app dumps
+extracted/
