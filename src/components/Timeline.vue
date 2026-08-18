@@ -8,6 +8,7 @@ import ZoomSlider from '@/components/ZoomSlider.vue'
 import {
   blocksWith,
   makeBlock,
+  MAX_CYCLES,
   nextCycleId,
   offsetOf,
   totalDuration,
@@ -77,6 +78,7 @@ function select(id: string) {
 }
 
 function askCreate() {
+  if (cycles.value.length >= MAX_CYCLES) return
   naming.value = { mode: 'create' }
   nameDraft.value = uniqueName(t('cycles.newName'), cycles.value)
   nameOpen.value = true

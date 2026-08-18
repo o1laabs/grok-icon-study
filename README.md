@@ -26,7 +26,7 @@ Do not commit extracted geometry, icons, or a third-party app bundle.
 
 ## What's on the site
 
-The rail switches three views. **Customise** is 18 body shapes, 11 inks and the rest-face playlist. **Animations** is bloub’s timeline editor on our 39 states: drag to reorder, pull a card to set duration, save named cycles in `localStorage`. The right-hand tiles append a block. **Settings** is language (French, English, Chinese) and credits. GIF/MP4 export is not in this tree.
+The rail switches three views. **Customise** is 8 body shapes, 11 inks and the rest-face playlist; stills export as PNG / SVG / GIF. **Animations** is bloub’s timeline editor on our 39 states: drag to reorder, pull a card to set duration, save named cycles in `localStorage`, export the sequence as MP4 or GIF. The right-hand tiles append a block. **Settings** is language (French, English, Chinese) and credits.
 
 The centre avatar is always `GrokCharacter` in `hold` mode. Tiles paint one frame and stop. Nothing from bloub’s `src/bot/` is in this tree.
 

@@ -93,6 +93,14 @@ export function moveBlock(blocks: Block[], from: number, to: number): Block[] {
   return next
 }
 
+/** Index of the clip that was current, after `moveBlock(from, to)`. */
+export function followMove(current: number, from: number, to: number): number {
+  if (current === from) return to
+  if (from < to && current > from && current <= to) return current - 1
+  if (from > to && current >= to && current < from) return current + 1
+  return current
+}
+
 export function uniqueName(base: string, cycles: Cycle[]): string {
   const taken = new Set(cycles.map((c) => c.name))
   if (!taken.has(base)) return base

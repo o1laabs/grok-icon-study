@@ -4,6 +4,7 @@ import BlockPicker from '@/components/BlockPicker.vue'
 import BotTile from '@/components/BotTile.vue'
 import {
   clampDuration,
+  followMove,
   moveBlock,
   offsetOf,
   STEP,
@@ -11,8 +12,8 @@ import {
   type Block,
   type StateId
 } from '@/editor/cycles'
-import { BASE_SCALE, clampZoom, ticksFor } from '@/ui/timeline'
 import { secondes, secondesCourtes, stateName, t } from '@/i18n'
+import { BASE_SCALE, clampZoom, ticksFor } from '@/ui/timeline'
 
 /**
  * La piste : une regle graduee, les cartes du montage, et les gestes qui vont
@@ -240,10 +241,8 @@ function onBlockUp(index: number) {
     return
   }
   if (d.to === d.from) return
-  // le curseur suit la carte qu'on deplace, sinon la lecture sauterait ailleurs
-  const suivi = block.value === d.from ? d.to : block.value
   emit('update:blocks', moveBlock(props.blocks, d.from, d.to))
-  block.value = suivi
+  block.value = followMove(block.value, d.from, d.to)
 }
 
 function onResizeDown(index: number, e: PointerEvent) {
@@ -298,7 +297,7 @@ async function onCardKey(index: number, e: KeyboardEvent) {
   const cible = index + sens
   if (cible < 0 || cible >= props.blocks.length) return
   emit('update:blocks', moveBlock(props.blocks, index, cible))
-  block.value = cible
+  block.value = followMove(block.value, index, cible)
   await nextTick()
   const liste = track.value?.querySelectorAll<HTMLButtonElement>('[data-carte]')
   liste?.[cible]?.focus()

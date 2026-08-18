@@ -12,8 +12,9 @@ const props = withDefaults(
     size?: number
     interactive?: boolean
     showLabel?: boolean
+    active?: boolean
   }>(),
-  { interactive: true, showLabel: true }
+  { interactive: true, showLabel: true, active: true }
 )
 
 const svg = ref<SVGSVGElement | null>(null)
@@ -22,7 +23,6 @@ const painted = ref(false)
 async function paint() {
   const node = svg.value
   if (!node) return
-  node.innerHTML = ''
   const mount = await paintTile(node, {
     state: props.state ?? 'idle',
     shape: props.shape ?? 'blob',
@@ -34,12 +34,27 @@ async function paint() {
   painted.value = !!mount
 }
 
+const dirty = ref(false)
+
 onMounted(() => {
   void paint()
 })
 watch(() => [props.state, props.shape, props.color], () => {
+  if (!props.active) {
+    dirty.value = true
+    return
+  }
   void paint()
 })
+watch(
+  () => props.active,
+  (on) => {
+    if (on && dirty.value) {
+      dirty.value = false
+      void paint()
+    }
+  }
+)
 </script>
 
 <template>

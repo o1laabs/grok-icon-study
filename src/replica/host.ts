@@ -18,16 +18,39 @@ export type ReplicaInput = {
   size: number
 }
 
-let tileQueue: Promise<unknown> = Promise.resolve()
+const TILE_MAX = 6
+let tileActive = 0
+const tileWait: Array<() => void> = []
 
-/** One-frame tiles share a queue so first paint does not spawn 30 engines at once. */
-export function paintTile(svg: SVGSVGElement, input: ReplicaInput): Promise<ReplicaMount | null> {
-  const job = tileQueue.then(() => mountReplica(svg, input, false))
-  tileQueue = job.then(
-    () => undefined,
-    () => undefined
-  )
-  return job
+function lockTile(): Promise<void> {
+  if (tileActive < TILE_MAX) {
+    tileActive++
+    return Promise.resolve()
+  }
+  return new Promise((resolve) => {
+    tileWait.push(() => {
+      tileActive++
+      resolve()
+    })
+  })
+}
+
+function unlockTile() {
+  tileActive--
+  tileWait.shift()?.()
+}
+
+export async function paintTile(
+  svg: SVGSVGElement,
+  input: ReplicaInput
+): Promise<ReplicaMount | null> {
+  await lockTile()
+  try {
+    svg.innerHTML = ''
+    return await mountReplica(svg, input, false)
+  } finally {
+    unlockTile()
+  }
 }
 
 export async function mountReplica(
@@ -70,11 +93,12 @@ export async function mountReplica(
   let last = { ...input }
   return {
     apply(next) {
-      if (next.state !== last.state) bot.setState(next.state, { resetEyes: true })
+      if (next.state !== last.state) bot.setState(next.state, { resetEyes: false })
       if (next.shape !== last.shape) bot.setShape(next.shape)
       if (next.color !== last.color) bot.setColor(next.color)
       if (next.follow !== last.follow) bot.setFollowPointer(next.follow)
       if (next.paper !== last.paper) bot.setEyeColor(next.paper)
+      if (next.size !== last.size) bot.setSize(next.size)
       last = { ...next }
     },
     spin: () => bot.spinOnce(1),

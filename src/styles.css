@@ -593,11 +593,23 @@ html::-webkit-scrollbar {
   opacity: 0;
 }
 
+.fondu-enter-active,
+.fondu-leave-active {
+  transition: opacity 0.35s ease-out;
+}
+
+.fondu-enter-from,
+.fondu-leave-to {
+  opacity: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .scene,
   .panneau,
   .panneau--ouvert,
-  .avatar {
+  .avatar,
+  .fondu-enter-active,
+  .fondu-leave-active {
     transition: none;
   }
 

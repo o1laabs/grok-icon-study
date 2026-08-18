@@ -4,7 +4,7 @@ import BotTile from '@/components/BotTile.vue'
 import { shapeName, stateName, t } from '@/i18n'
 import { COLOR_IDS, EXPRESSION_IDS, colorFill, liveShapes } from '@/replica/catalog'
 
-const props = defineProps<{ ready?: boolean }>()
+const props = defineProps<{ ready?: boolean; active?: boolean }>()
 const shape = defineModel<string>('shape', { required: true })
 const color = defineModel<string>('color', { required: true })
 const expression = defineModel<string>('expression', { required: true })
@@ -26,6 +26,7 @@ const shapes = computed(() => {
         :shape="id"
         :color="color"
         :state="expression"
+        :active="active"
         @click="shape = id"
       />
     </div>
@@ -40,6 +41,7 @@ const shapes = computed(() => {
         :shape="shape"
         :color="color"
         :state="id"
+        :active="active"
         @click="expression = id"
       />
     </div>

@@ -13,6 +13,7 @@ export type ReplicaBot = {
   orbitGaze: (ms?: number) => void
   holdFrame: (at?: number) => void
   step: (dt: number) => void
+  setSize: (px: number) => void
   destroy: () => void
 }
 

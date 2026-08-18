@@ -276,10 +276,20 @@
       this.svg.style.setProperty("--bg", this.eyeColor || EYE_BG);
     }
 
+    _clock() {
+      return this.driven ? this.last : performance.now();
+    }
+
     setState(name, { resetEyes = false } = {}) {
       if (!this.playlists[name]) return;
       this.state = name;
-      this.stateAt = performance.now();
+      this.stateAt = this._clock();
+      if (this.driven) {
+        this.trick = null;
+        this.spinTurn = null;
+        this.hopAt = -1;
+        this.wildWide = false;
+      }
       const list = this.playlists[name];
       this.eyeIdx = 0;
       if (resetEyes) {
@@ -407,6 +417,11 @@
       return this.snapshot();
     }
 
+    setSize(px) {
+      this.sizePx = px > 0 ? px : null;
+      this._applyPoseScale();
+    }
+
     _applyPoseScale() {
       const sc = this.loginWrap ? poseScale(this.shapeName) : (this.pose.scale || 1);
       this.pose.scale = sc;
@@ -529,7 +544,7 @@
     }
 
     _cycleShapeTrick() {
-      if (this.reduceMotion || this.paused) return;
+      if (this.reduceMotion || this.paused || this.driven) return;
       this.trickCycle = (this.trickCycle + 1) % 5;
       this.wildWide = false;
       if (this.trickCycle === 0) this._pn(1);
@@ -686,7 +701,7 @@
         this.celebrateAt = now + 6200;
       }
 
-      if (now >= this.trickAt) {
+      if (!this.driven && now >= this.trickAt) {
         if ((V_T.has(this.state) || B_T.has(this.state)) && !this.spinTurn && this.hopAt < 0 && !this.trick) {
           const z = Math.random();
           if (V_T.has(this.state)) {

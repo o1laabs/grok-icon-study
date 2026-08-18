@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
-import type { Cycle } from '@/editor/cycles'
+import { MAX_CYCLES, type Cycle } from '@/editor/cycles'
 import { nomDeCycle, t } from '@/i18n'
 
 /**
@@ -8,7 +8,7 @@ import { nomDeCycle, t } from '@/i18n'
  * ni la suppression d'une entree, d'ou ce menu — et il s'ouvre vers le haut,
  * la barre etant en bas de l'ecran.
  */
-defineProps<{ cycles: Cycle[]; current: Cycle }>()
+const props = defineProps<{ cycles: Cycle[]; current: Cycle }>()
 const activeId = defineModel<string>('activeId', { required: true })
 const emit = defineEmits<{ create: []; remove: [id: string]; rename: [id: string] }>()
 
@@ -21,6 +21,7 @@ function choose(id: string) {
 }
 
 function create() {
+  if (props.cycles.length >= MAX_CYCLES) return
   open.value = false
   emit('create')
 }
@@ -135,7 +136,8 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onOutside))
 
       <button
         type="button"
-        class="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition hover:bg-black/5"
+        class="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-40"
+        :disabled="cycles.length >= MAX_CYCLES"
         @click="create"
       >
         <span class="w-3 shrink-0 text-[var(--muted)]">+</span>

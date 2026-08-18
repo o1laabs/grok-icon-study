@@ -11,6 +11,7 @@ const props = defineProps<{
   shape: string
   color: string
   ready?: boolean
+  active?: boolean
 }>()
 
 const groups = computed(() => {
@@ -43,6 +44,7 @@ const groups = computed(() => {
           :state="id"
           :shape="shape"
           :color="color"
+          :active="active"
           @click="emit('pick', id)"
         />
       </div>

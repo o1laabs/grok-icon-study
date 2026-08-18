@@ -72,6 +72,17 @@
     place-items: center;
     box-shadow: inset 0 -8px 18px rgba(40, 30, 10, 0.08), 0 12px 28px rgba(0,0,0,.3);
   }
+  .missing {
+    width: min(100%, 280px);
+    margin: 12px auto 0;
+    padding: 22px 18px;
+    border-radius: 16px;
+    background: #2a2823;
+    color: #d8d0c0;
+    font-size: 13px;
+  }
+  .missing strong { display: block; margin-bottom: 8px; color: var(--accent); font-weight: 560; }
+  .missing a { color: var(--accent); }
   .disk-login svg { width: 64px; height: 64px; overflow: visible; color-scheme: light; --bg: var(--disk); --fg: #111; }
   .disk-login span {
     display: block;
@@ -180,6 +191,12 @@
         </div>
         <span style="display:block;margin-top:8px;font-size:10px;color:#8d877b;text-align:center">登录 sizePx: 64</span>
       </div>
+    </div>
+    <div class="missing" id="missing-geo" hidden>
+      <strong>几何未加载</strong>
+      本仓库不包含 <code>geometry-data.js</code>。把符合
+      <a href="geometry.schema.md">geometry.schema.md</a>
+      的数据放到同目录后刷新，即可本地预览。不要提交或再分发从商业应用抽出的造型。
     </div>
     <div class="modes">
       <button id="mode-onboard" aria-pressed="true">登录轮换</button>
@@ -296,6 +313,10 @@
     document.getElementById("mode-hold").setAttribute("aria-pressed", mode === "hold");
   }
 
+  if (!window.GROK_GEO?.shapes || typeof window.GROK?.create !== "function") {
+    document.getElementById("missing-geo").hidden = false;
+  } else {
+
   GROK_META.groups.forEach((group) => {
     const h = document.createElement("h2");
     h.textContent = group.label;
@@ -387,6 +408,7 @@
   document.getElementById("act-spin").onclick = () => bots.forEach((el) => el.spinOnce(1));
   document.getElementById("act-bounce").onclick = () => bots.forEach((el) => el.bounceOnce());
   document.getElementById("act-burst").onclick = () => bots.forEach((el) => el.burstOnce());
+  }
 </script>
 </body>
 </html>

@@ -56,7 +56,8 @@
 
     connectedCallback() {
       if (this._handle) return;
-      const root = this.attachShadow({ mode: "open" });
+      const root = this.shadowRoot || this.attachShadow({ mode: "open" });
+      root.replaceChildren();
       const box = document.createElement("div");
       box.setAttribute("part", "disk");
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");

@@ -112,6 +112,7 @@ watch(activeId, (v) => {
   ecris('cycle', v)
   block.value = 0
   elapsed.value = 0
+  state.value = cycle.value.blocks[0]?.state ?? 'idle'
 })
 
 watch(block, (i) => {
@@ -144,9 +145,12 @@ function onSeek(t: number) {
   state.value = cycle.value.blocks[index]?.state ?? 'idle'
 }
 
+const gardeAnim = ref(false)
+
 watch(view, (now) => {
   intro.value = false
   if (now === 'animations') {
+    gardeAnim.value = true
     playing.value = true
     state.value = cycle.value.blocks[block.value]?.state ?? 'idle'
     return
@@ -248,6 +252,11 @@ function annuleCycle() {
 
 watch(dialogueCycle, (ouverte) => {
   if (ouverte) erreurCycle.value = false
+  else annuleCycle()
+})
+
+watch([view, preview], () => {
+  if (view.value !== 'animations' || preview.value) annuleCycle()
 })
 
 const CONFIRMATION_MS = 1800
@@ -330,6 +339,7 @@ onUnmounted(() => {
   clearTimeout(pending)
   clearTimeout(minuteurBarre)
   clearTimeout(confirmation)
+  annuleCycle()
 })
 </script>
 
@@ -350,7 +360,8 @@ onUnmounted(() => {
   <div
     class="scene min-h-full items-stretch justify-center p-8 max-lg:flex max-lg:flex-col max-lg:gap-10 max-lg:px-5"
     :class="[
-      !preview && view === 'animations' && 'scene--timeline pb-[calc(var(--timeline)_+_1rem)]',
+      !preview && 'scene--timeline lg:pb-[calc(var(--timeline)_+_1rem)]',
+      !preview && view === 'animations' && 'pb-[calc(var(--timeline)_+_1rem)]',
       !preview && 'max-lg:pt-20',
       nue || preview ? 'scene--seule' : view === 'reglages' && 'scene--gauche'
     ]"
@@ -427,23 +438,27 @@ onUnmounted(() => {
       :class="droite ? 'panneau--ouvert max-lg:order-2' : 'max-lg:hidden'"
     >
       <Customizer
-        v-if="view === 'personnaliser'"
+        v-show="view === 'personnaliser'"
         v-model:shape="shape"
         v-model:color="color"
         v-model:expression="expression"
         :ready="ready"
+        :active="view === 'personnaliser'"
       />
       <AnimPanel
-        v-else-if="view === 'animations'"
+        v-if="gardeAnim"
+        v-show="view === 'animations'"
         v-model="state"
         :shape="shape"
         :color="color"
         :ready="ready"
+        :active="view === 'animations'"
         @pick="addBlock"
       />
     </aside>
   </div>
 
+  <Transition name="fondu">
   <Timeline
     v-if="view === 'animations' && !preview"
     v-model:cycles="cycles"
@@ -458,6 +473,7 @@ onUnmounted(() => {
     @preview="preview = true"
     @exporter="dialogueCycle = true"
   />
+  </Transition>
 
   <p v-if="view === 'reglages' && !preview" class="wordmark" aria-hidden="true">STUDY</p>
 </template>
