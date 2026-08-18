@@ -17,15 +17,31 @@
     VIEW, VIEW_HALF, VIEW_MID, inkFg, inkCss, EYE_BG,
   } = T;
 
+  const snapSpring = (s, v) => {
+    s.x = s.t = v;
+    s.v = 0;
+  };
+
+  const HOLD_GAZE = {
+    curious: { x: 12, y: -6 }, sad: { x: 2, y: 8 }, shy: { x: 10, y: 7 },
+    proud: { x: 0, y: -6 }, bored: { x: 12, y: 6 }, suspicious: { x: -15, y: 3 },
+    confused: { x: 12, y: 3 }, thinking: { x: 12, y: -7 }, angry: { x: 0, y: 2 },
+    drowsy: { x: 4, y: 7 }, searching: { x: 14, y: -4 }, working: { x: 3, y: 7 },
+    notifying: { x: 7, y: -3 }, playful: { x: 10, y: -4 }, happy: { x: -6, y: -4 },
+    laughing: { x: 4, y: -4 }, listening: { x: 5, y: -2 }, scared: { x: 12, y: 2 },
+  };
+
   class GrokCharacter {
     constructor(svg, opts = {}) {
       this.svg = svg;
       this.shapeName = opts.shape || "blob";
       this.colorId = opts.color || "black";
       this.scheme = opts.scheme || "light";
-      this.mode = opts.mode || "onboarding";
+      this.mode = opts.mode || "hold";
       this.state = opts.state || "idle";
       this.onChange = opts.onChange || (() => {});
+      this.frameHalf = opts.frameHalf || VIEW_HALF;
+      this.fitBox = !!opts.fitBox;
       this.loginWrap = opts.loginWrap !== false;
       this.eyeTopology = opts.eyeTopology ?? this.loginWrap;
       this.faceTune = opts.faceTune ?? (this.loginWrap ? FACE_TUNE : null);
@@ -36,12 +52,16 @@
       this.emphasis = !!opts.emphasis;
       this.followPointer = !!opts.followPointer;
       this.gazeTarget = opts.gazeTarget || null;
+      this.frozen = opts.paused === "hold-pose";
+      this.driven = !!opts.driven;
       this.paused = !!opts.paused;
       this.reduceMotion = opts.reduceMotion ?? (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
       this.badgeColor = opts.badgeColor || "var(--gb-badge, #1d9bf0)";
       this.sizePx = opts.sizePx || null;
       this.eyeColor = opts.eyeColor || null;
       this.inkFlat = opts.inkFlat || null;
+      this.geo = opts.geo || g.GROK_GEO;
+      this.playlists = opts.playlist || EYE_PLAYLIST;
 
       this.spin = spring(0);
       this.tx = spring(0);
@@ -102,19 +122,27 @@
       this.ovTarget = null;
       this.ovRest = false;
       this.ovRestAt = 0;
-      this.pxW = 190;
+      this.pxW = opts.sizePx || 190;
       this.pxAt = 0;
       this.partScale = 1;
       this.celebrateAt = -1;
+      this.gazeSpin = 0;
       this.extras = { turn: null, Kr: 0, yi: 0, ki: 0, Yr: 0, Zr: 0, wi: 0, hop: 0 };
+      this.poseOut = { spin: 0, tx: 0, ty: 0, squash: 1, lid: 1, eyeBoost: 1 };
 
       this._build();
       this.setColor(this.colorId, this.scheme);
       this._applyPoseScale();
       this.setState(this.state, { resetEyes: true });
-      this._bindPointer();
-      this._paint(this.t0);
-      this._raf = requestAnimationFrame((t) => this._tick(t));
+      if (!this.driven) this._bindPointer();
+      if (this.frozen) {
+        this.holdFrame();
+      } else if (this.driven) {
+        this._paint(this.t0);
+      } else {
+        this._paint(this.t0);
+        this._armTick();
+      }
     }
 
     destroy() {
@@ -125,7 +153,7 @@
 
     _freshCtx(now) {
       return {
-        nodUntil: now + 1800,
+        nodUntil: now + rand(1200, 2200),
         nodEnd: 0,
         angryShakeUntil: 0,
         impulseAt: now + rand(500, 1200),
@@ -156,7 +184,28 @@
     }
 
     setPaused(v) {
+      if (v === "hold-pose") {
+        this.holdFrame();
+        return;
+      }
+      this.frozen = false;
       this.paused = !!v;
+      if (!this.paused) this._armTick();
+    }
+
+    _armTick() {
+      if (this.frozen || this.driven || this._raf) return;
+      this.last = performance.now();
+      this._raf = requestAnimationFrame((t) => this._tick(t));
+    }
+
+    _wake() {
+      if (this.frozen || this.driven) return;
+      if (this.paused) this._armTick();
+    }
+
+    step(dt) {
+      this._tick(this.last + Math.max(0, dt) * 1000);
     }
 
     setEmphasis(v) {
@@ -176,10 +225,10 @@
     }
 
     setShape(name) {
-      if (!g.GROK_GEO.shapes[name] || name === this.shapeName) return;
-      const R = g.GROK_GEO.Re;
+      if (!this.geo.shapes[name] || name === this.shapeName) return;
+      const R = this.geo.Re;
       const k = K2(clamp(this.shapeSpring.x, 0, 1));
-      const rest = FX.shapeMetrics(g.GROK_GEO.shapes[this.shapeName], R);
+      const rest = FX.shapeMetrics(this.geo.shapes[this.shapeName], R);
       if (k >= 1 || !this.prevFace || !this.prevRing) {
         this.prevFace = rest.face;
         this.prevRing = rest.ring;
@@ -199,6 +248,7 @@
       if (this.loginWrap) this.eyeScaleProp = shapeEyeScale(name);
       this._applyPoseScale();
       this._cycleShapeTrick();
+      this._wake();
     }
 
     setColor(id, scheme) {
@@ -209,7 +259,7 @@
       } else if (this.loginWrap) {
         this.svg.style.setProperty("--fg", inkFg(id));
       } else {
-        const pal = g.GROK_GEO.palette[id] || g.GROK_GEO.palette.black;
+        const pal = this.geo.palette[id] || this.geo.palette.black;
         this.svg.style.setProperty("--fg", this.scheme === "dark" ? pal.dark : pal.light);
       }
       this.svg.style.setProperty("--ink", inkCss(id));
@@ -227,10 +277,10 @@
     }
 
     setState(name, { resetEyes = false } = {}) {
-      if (!EYE_PLAYLIST[name]) return;
+      if (!this.playlists[name]) return;
       this.state = name;
       this.stateAt = performance.now();
-      const list = EYE_PLAYLIST[name];
+      const list = this.playlists[name];
       this.eyeIdx = 0;
       if (resetEyes) {
         this.eyeFrom = list[0];
@@ -255,14 +305,12 @@
         : rand(6000, 10000)
       );
       this.celebrateAt = name === "celebrate" ? this.stateAt + 140 : -1;
-      this.trick = null;
-      this.spinTurn = null;
-      this.hopAt = -1;
-      this.wildWide = false;
-      if (name !== "writing") this.fx?.resetInk();
+      this.fx?.resetInk();
+      this.fx?.resetRecv();
       if (name !== "waking" && name !== "sleeping" && name !== "drowsy") {
         EY.queueBlink(this.blinkQueue, this.stateAt);
       }
+      this._wake();
       try {
         this.onChange(this.snapshot());
       } catch (_) { /* host UI may not be ready */ }
@@ -283,17 +331,80 @@
         squash: this.squash.x,
         blink: this.blink.x,
         overlay: this.ovKind,
+        overlayX: this.overlay.x,
+        notify: this.notify.x,
+        trick: this.trick?.kind || (this.spinTurn ? "pn" : null),
+        shapeSpring: this.shapeSpring.x,
+        badge: this.badge && this.badge.style.display !== "none"
+          ? { x: +this.badge.getAttribute("cx"), y: +this.badge.getAttribute("cy") }
+          : null,
       };
     }
 
     spinOnce(turns = 1) {
+      this._wake();
       this._pn(turns);
     }
     bounceOnce() {
+      this._wake();
       this._hop(performance.now());
     }
     burstOnce() {
-      if (!this.reduceMotion) this.particles.burst(22, 1.1, 0.3);
+      if (!this.reduceMotion && !this.paused) this.particles.burst(22, 1.1, 0.3);
+    }
+
+    orbitGaze(ms = 1500) {
+      if (this.reduceMotion || this.frozen) return;
+      this.gazeOrbit = { at: performance.now(), dur: Math.max(ms, 1), from: Math.PI * 2 };
+      this._armTick();
+    }
+
+    holdFrame(at = 900) {
+      this.frozen = true;
+      this.paused = true;
+      if (this._raf) {
+        cancelAnimationFrame(this._raf);
+        this._raf = 0;
+      }
+      const now = this.t0 + at;
+      const mt = at / 1000;
+      const pose = applyPose(this.state, mt, mt, now, this.ctx, {
+        eyeTo: this.eyeTo,
+        eyeMorphX: 1,
+        blinkX: this.blink.x,
+        playlist: this.playlists,
+        prev: this.poseOut,
+      });
+      this.ctx.wantPn = null;
+      this.ctx.wantBurst = null;
+      this.ctx.tyKick = 0;
+      this.ctx.spinKick = 0;
+      this.poseOut = pose;
+      snapSpring(this.spin, pose.spin);
+      snapSpring(this.tx, pose.tx);
+      snapSpring(this.ty, pose.ty);
+      snapSpring(this.squash, pose.squash);
+      snapSpring(this.eyeScale, pose.eyeBoost);
+      snapSpring(this.blink, pose.lid);
+      this._stepOverlay(now);
+      if (this.ovKind) {
+        snapSpring(this.overlay, this.overlay.t);
+        snapSpring(this.overlayMix, 1);
+        snapSpring(this.overlayTurn, this.overlayTurn.t);
+        this.fx.overlayAt = this.t0;
+      }
+      snapSpring(this.notify, this.state === "notifying" ? 1 : 0);
+      snapSpring(this.humDots, this.state === "humming" ? 1 : 0);
+      if (this.state === "humming" || this.state === "loading") this.ovSpin = 2.1;
+      const gz = HOLD_GAZE[this.state] || { x: 0, y: 0 };
+      snapSpring(this.gazeX, gz.x);
+      snapSpring(this.gazeY, gz.y);
+      this.eyeMorph.x = 1;
+      this.eyeMorph.v = 0;
+      this.eyeMorph.t = 1;
+      this._fromPolys = null;
+      this._paint(now);
+      return this.snapshot();
     }
 
     _applyPoseScale() {
@@ -303,7 +414,8 @@
         this.svg.style.width = `${this.sizePx}px`;
         this.svg.style.height = `${this.sizePx}px`;
       }
-      if (Math.abs(sc - 1) > 0.001) {
+      const boxed = this.fitBox || (this.sizePx && this.sizePx < 120);
+      if (!boxed && Math.abs(sc - 1) > 0.001) {
         this.svg.style.transform = `scale(${sc})`;
         this.svg.style.transformOrigin = "50% 50%";
       } else {
@@ -329,7 +441,7 @@
     }
 
     _build() {
-      const geo = g.GROK_GEO;
+      const geo = this.geo;
       const vb = geo.viewBox;
       this.svg.setAttribute("viewBox", `${vb.minX} ${vb.minY} ${vb.width} ${vb.height}`);
       this.svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
@@ -400,7 +512,7 @@
     }
 
     _currentPolys(t) {
-      const eyes = g.GROK_GEO.eyes;
+      const eyes = this.geo.eyes;
       const from = this._fromPolys || eyes[this.eyeFrom];
       const to = eyes[this.eyeTo];
       return [lerpPoly(from[0], to[0], t), lerpPoly(from[1], to[1], t)];
@@ -412,7 +524,8 @@
     }
 
     _hop(now) {
-      if (this.hopAt < 0) this.hopAt = now;
+      if (this.reduceMotion || this.paused || this.hopAt >= 0) return;
+      this.hopAt = now;
     }
 
     _cycleShapeTrick() {
@@ -423,9 +536,11 @@
       else if (this.trickCycle === 1) {
         this.wildWide = true;
         this._pn(2);
-      } else if (this.trickCycle === 2) this.trick = TR.startTrick("spinBounce", this.reduceMotion);
-      else if (this.trickCycle === 3) this.trick = TR.startTrick("spinDizzy", this.reduceMotion);
-      else {
+      } else if (this.trickCycle === 2) {
+        if (!this.trick) this.trick = TR.startTrick("spinBounce", this.reduceMotion);
+      } else if (this.trickCycle === 3) {
+        if (!this.trick) this.trick = TR.startTrick("spinDizzy", this.reduceMotion);
+      } else {
         this._pn(1);
         this.particles.burst(16, 0.95, 0.3);
       }
@@ -499,21 +614,17 @@
         this.pointer.tx = 0;
         this.pointer.ty = 0;
       }
-      const z = Rn(0.16);
-      this.pointer.x += (this.pointer.tx - this.pointer.x) * z;
-      this.pointer.y += (this.pointer.ty - this.pointer.y) * z;
     }
 
     _tick(now) {
+      if (this.frozen) {
+        this._raf = 0;
+        return;
+      }
       const dt = Math.min((now - this.last) / 1000, 0.1);
       this.last = now;
 
-      if (this.paused) {
-        this._raf = requestAnimationFrame((t) => this._tick(t));
-        return;
-      }
-
-      if (this.mode === "onboarding" && now - this.stateAt >= ONBOARDING_MS) {
+      if (!this.paused && this.mode === "onboarding" && now - this.stateAt >= ONBOARDING_MS) {
         this.moodN += 1;
         this.setState(onboardMood(this.moodN));
       }
@@ -524,7 +635,10 @@
         eyeTo: this.eyeTo,
         eyeMorphX: this.eyeMorph.x,
         blinkX: this.blink.x,
+        playlist: this.playlists,
+        prev: this.poseOut,
       });
+      this.poseOut = pose;
       this.spin.t = pose.spin;
       this.tx.t = pose.tx;
       this.ty.t = pose.ty;
@@ -567,8 +681,8 @@
 
       this._stepOverlay(now);
 
-      if (this.celebrateAt > 0 && now >= this.celebrateAt && !this.trick && !this.spinTurn) {
-        this.trick = TR.startTrick("spinWild", this.reduceMotion);
+      if (this.celebrateAt > 0 && now >= this.celebrateAt && !this.trick) {
+        this.trick = TR.startTrick("spinWild", this.reduceMotion || this.paused);
         this.celebrateAt = now + 6200;
       }
 
@@ -577,10 +691,10 @@
           const z = Math.random();
           if (V_T.has(this.state)) {
             if (z < 0.55) this._pn(1);
-            else this.trick = TR.startTrick("spinBounce", this.reduceMotion);
-          } else if (z < 0.34) this.trick = TR.startTrick("spinBounce", this.reduceMotion);
+            else this.trick = TR.startTrick("spinBounce", this.reduceMotion || this.paused);
+          } else if (z < 0.34) this.trick = TR.startTrick("spinBounce", this.reduceMotion || this.paused);
           else if (z < 0.62) this._hop(now);
-          else if (z < 0.86) this.trick = TR.startTrick("spinDizzy", this.reduceMotion);
+          else if (z < 0.86) this.trick = TR.startTrick("spinDizzy", this.reduceMotion || this.paused);
           else this._pn(1);
         }
         this.trickAt = now + rand(9000, 18000);
@@ -594,17 +708,12 @@
         this.hopAt = -1;
         hop = 0;
       }
-      let turn = tf.turn;
-      if (this.spinTurn) {
-        turn = (turn ?? 0) + this.spinTurn.x;
-        if (TR.spinTurnSettled(this.spinTurn)) this.spinTurn = null;
-      }
-      this.extras = { ...tf, turn, hop };
+      this.extras = { ...tf, turn: tf.turn, hop };
 
       if (this.extras.eyeBoost != null) this.eyeScale.t = this.extras.eyeBoost;
 
       if (this.state !== "waking" && this.state !== "sleeping" && now >= this.eyeUntil) {
-        const list = EYE_PLAYLIST[this.state];
+        const list = this.playlists[this.state];
         this.eyeIdx = (this.eyeIdx + 1 + Math.floor(rand(0, list.length - 1))) % list.length;
         const stiff = this.state === "searching" || this.state === "excited" ? 10 : 6;
         this._morphEyes(list[this.eyeIdx], stiff);
@@ -649,7 +758,7 @@
       }
 
       if (this.reduceMotion) {
-        this._morphEyes(EYE_PLAYLIST[this.state][0]);
+        this._morphEyes(this.playlists[this.state][0]);
         this.spin.t = 0; this.tx.t = 0; this.ty.t = 0;
         this.squash.t = 1; this.blink.t = 1; this.eyeScale.t = 1;
       }
@@ -679,6 +788,25 @@
         this.overlayTurn.x = this.overlayTurn.t;
         this.overlay.x = this.overlay.t;
       }
+      if (this.spinTurn) {
+        if (TR.spinTurnSettled(this.spinTurn)) {
+          this.spinTurn = null;
+          this.wildWide = false;
+        } else {
+          this.extras = { ...this.extras, turn: (this.extras.turn ?? 0) + this.spinTurn.x };
+        }
+      }
+      if (this.gazeOrbit) {
+        const u = clamp((now - this.gazeOrbit.at) / this.gazeOrbit.dur, 0, 1);
+        const ease = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+        this.gazeSpin = this.gazeOrbit.from * (1 - ease);
+        if (u >= 1) {
+          this.gazeOrbit = null;
+          this.gazeSpin = 0;
+        }
+      } else {
+        this.gazeSpin = 0;
+      }
       this.notify.t = this.state === "notifying" ? 1 : 0;
       this.humDots.t = this.state === "humming" ? 1 : 0;
 
@@ -703,11 +831,52 @@
 
       this._updatePointer(now);
       this._paint(now);
+
+      if (this.driven) {
+        this._raf = 0;
+        return;
+      }
+
+      if (
+        this.paused
+        && !this.trick
+        && !this.spinTurn
+        && this.hopAt < 0
+        && !this.particles.hasLife()
+        && Math.abs(this.overlay.x - this.overlay.t) < 0.001
+        && Math.abs(this.overlayTurn.t - this.overlayTurn.x) < 0.01
+        && this.overlayMix.x > 0.996
+        && Math.abs(this.shapeSpring.x - this.shapeSpring.t) < 0.001
+        && Math.abs(this.eyeMorph.x - this.eyeMorph.t) < 0.001
+      ) {
+        for (const s of [this.spin, this.tx, this.ty, this.gazeX, this.gazeY]) {
+          s.x = 0; s.v = 0; s.t = 0;
+        }
+        for (const s of [this.squash, this.blink, this.eyeScale]) {
+          s.x = 1; s.v = 0; s.t = 1;
+        }
+        this.shapeSpring.x = this.shapeSpring.t;
+        this.shapeSpring.v = 0;
+        this.blinkQueue = [];
+        this.winkAt = -1e9;
+        const home = this.playlists[this.state]?.[0] ?? 0;
+        this.eyeFrom = home;
+        this.eyeTo = home;
+        this._fromPolys = null;
+        this.eyeMorph.x = 1;
+        this.eyeMorph.v = 0;
+        this.eyeMorph.t = 1;
+        this.poseOut = { spin: 0, tx: 0, ty: 0, squash: 1, lid: 1, eyeBoost: 1 };
+        this._paint(0);
+        this._raf = 0;
+        return;
+      }
+
       this._raf = requestAnimationFrame((t) => this._tick(t));
     }
 
     _paint(now) {
-      const geo = g.GROK_GEO;
+      const geo = this.geo;
       const R = geo.Re;
       const shape = geo.shapes[this.shapeName];
       const morphK = K2(clamp(this.shapeSpring.x, 0, 1));
@@ -744,7 +913,7 @@
         : FX.shapeRing(shape.path, R);
       let liveRing = restRing;
       let turned = false;
-      const turnAt = !morphing && spinning ? FX.turnAtOf(this.shapeName, shape.path, R) : null;
+      const turnAt = !morphing && spinning ? FX.turnAtOf(this.shapeName, shape.path, R, geo.solids) : null;
       if (turnAt) {
         liveRing = turnAt(spinAmt);
         turned = true;
@@ -778,7 +947,7 @@
       const zCur = overlayViewZoom(this.ovKind, pScale);
       const zPrev = overlayViewZoom(this.ovPrev, pScale);
       const zoom = 1 + (zCur * mix + zPrev * (1 - mix) - 1) * yl * shrink;
-      const half = VIEW_HALF / zoom;
+      const half = this.frameHalf / zoom;
       this.svg.setAttribute("viewBox", `${(VIEW_MID - half).toFixed(2)} ${(VIEW_MID - half).toFixed(2)} ${(half * 2).toFixed(2)} ${(half * 2).toFixed(2)}`);
 
       const morphT = clamp(this.eyeMorph.x, 0, 1);
@@ -787,8 +956,9 @@
       const overlayLive = yl > 0.001 || Math.abs(this.overlayTurn.t - this.overlayTurn.x) > 0.01;
       let cyl = overlayLive ? this.overlayTurn.x : null;
       if (ex.turn != null) cyl = (cyl ?? 0) + ex.turn;
+      if (this.gazeSpin) cyl = (cyl ?? 0) + this.gazeSpin;
       const ringHint = morphing || turned ? liveRing : null;
-      const hasPtr = !!(this.gazeTarget || (this.followPointer && this.pointerRaw));
+      const tracking = !!(this.gazeTarget || (this.followPointer && this.pointerRaw));
       EY.paintEyes({
         now,
         polys,
@@ -806,7 +976,8 @@
         winkEye: this.winkEye,
         turn: cyl,
         cr,
-        pointer: hasPtr ? this.pointer : null,
+        pointer: this.pointer,
+        tracking,
         notifyX: this.notify.x,
         overlayX: this.overlay.x,
         eyeEls: this.eyeEls,

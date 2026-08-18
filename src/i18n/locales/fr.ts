@@ -1,0 +1,158 @@
+const fr = {
+  app: {
+    name: 'study',
+    title: 'study — personnage à ressorts',
+    botAria: 'Personnage animé par ressorts',
+    missingGeo:
+      'Géométrie locale absente. L’interface reste là ; le personnage non. Voir replica/geometry.schema.md.'
+  },
+  rail: {
+    nav: 'Sections',
+    customize: 'Personnaliser',
+    animations: 'Animations',
+    settings: 'Réglages'
+  },
+  panel: {
+    animations: 'Animation',
+    shape: 'Forme',
+    expression: 'Expression',
+    color: 'Couleur',
+    group_lifecycle: 'Cycle',
+    group_reactions: 'Réactions',
+    group_agent: 'Agent',
+    group_product: 'Produit'
+  },
+  shapes: {
+    blob: 'Blob',
+    bean: 'Haricot',
+    egg: 'Œuf',
+    teardrop: 'Goutte',
+    cloud: 'Nuage',
+    leaf: 'Feuille',
+    squircle: 'Cube',
+    capsule: 'Capsule'
+  },
+  export: {
+    action: 'Exporter en PNG',
+    more: 'Autres formats',
+    png: 'Télécharger le PNG',
+    svg: 'Télécharger le SVG',
+    anime: "Télécharger l'animation SVG",
+    gif: 'Télécharger le GIF animé',
+    cycleDetail: 'La vidéo est plus légère et plus fluide ; le GIF passe partout.',
+    cycleFormat: 'Format',
+    cycle_mp4: 'Vidéo MP4',
+    cycle_mp4_aide: 'Léger et fluide, fond obligatoire',
+    cycle_gif: 'GIF animé',
+    cycle_gif_aide: 'Lu partout, plus lourd',
+    cycleProgress: 'Export en cours…',
+    cycleReessayer: 'Réessayer',
+    gifTitle: 'Télécharger le GIF animé',
+    gifDetail:
+      "Le GIF ne gère la transparence qu'en tout ou rien : sans fond, le contour de la boule est un peu dur.",
+    gifBackground: 'Fond',
+    fond_blanc: 'Fond blanc',
+    fond_blanc_aide: 'Contour lisse, à poser sur du clair',
+    fond_transparent: 'Fond transparent',
+    fond_transparent_aide: "S'adapte à tout fond, contour un peu dur",
+    gifConfirm: 'Télécharger',
+    copie: "Copier l'image",
+    copieSvg: 'Copier le SVG',
+    done: 'Exporté',
+    copied: 'Copié',
+    failed: "Échec de l'export"
+  },
+  preview: {
+    exit: 'Quitter l’aperçu',
+    open: 'Aperçu',
+    key: 'Échap'
+  },
+  timeline: {
+    play: 'Lancer la lecture',
+    pause: 'Arrêter la lecture',
+    addAnimation: 'Ajouter une animation',
+    preview: 'Aperçu',
+    export: "Exporter la séquence d'animation",
+    zoom: 'Zoom de la piste',
+    blockAria: '{state}, {duration}',
+    blockDurationAria: 'Durée de {state}, {duration}',
+    blockRemoveAria: 'Retirer {state}'
+  },
+  dialog: {
+    cancel: 'Annuler',
+    nameCreateTitle: 'Nouveau cycle',
+    nameRenameTitle: 'Renommer le cycle',
+    nameField: 'Nom du cycle',
+    nameCreate: 'Créer',
+    nameRename: 'Renommer',
+    removeTitle: 'Supprimer « {name} » ?',
+    removeDetail:
+      'Ce montage sera perdu, avec son animation. | Ce montage sera perdu, avec ses {n} animations.',
+    removeConfirm: 'Supprimer'
+  },
+  cycles: {
+    defaultName: 'Cycle par défaut',
+    newName: 'Mon cycle',
+    menuNew: 'Nouveau cycle',
+    menuRenameAria: 'Renommer {name}',
+    menuRemoveAria: 'Supprimer {name}'
+  },
+  states: {
+    sleeping: 'Sommeil',
+    waking: 'Réveil',
+    idle: 'Repos',
+    listening: 'Écoute',
+    thinking: 'Réflexion',
+    searching: 'Recherche',
+    working: 'Travail',
+    excited: 'Excité',
+    surprised: 'Surpris',
+    suspicious: 'Méfiant',
+    angry: 'En colère',
+    drowsy: 'Somnolent',
+    happy: 'Heureux',
+    curious: 'Curieux',
+    confused: 'Confus',
+    bored: 'Blasé',
+    proud: 'Fier',
+    shy: 'Timide',
+    sad: 'Triste',
+    laughing: 'Rire',
+    scared: 'Effrayé',
+    playful: 'Joueur',
+    celebrate: 'Célébration',
+    orbit: 'Orbite',
+    radar: 'Radar',
+    progress: 'Progrès',
+    spawning: 'Apparition',
+    humming: 'Bourdonnement',
+    loading: 'Chargement',
+    dictating: 'Dictée',
+    writing: 'Écriture',
+    sending: 'Envoi',
+    receiving: 'Réception',
+    uploading: 'Téléversement',
+    notifying: 'Notification',
+    alerting: 'Alerte',
+    dragging: 'Glisser',
+    bouncing: 'Rebond',
+    'powering-down': 'Extinction'
+  },
+  settings: {
+    language: 'Langue',
+    about: 'À propos',
+    lab: 'Laboratoire',
+    labAria: 'Ouvrir le playground d’origine',
+    showcase: 'Showcase',
+    showcaseAria: 'Ouvrir le showcase d’enregistrement',
+    credits:
+      'Étude non officielle. Le mouvement vient du moteur replica ; la mise en page, de bloub. Sans lien avec xAI.',
+    missing: 'Pas de geometry-data.js — chrome seul, pas de personnage.'
+  },
+  units: {
+    seconds: '{n} s',
+    secondsShort: '{n}s'
+  }
+}
+
+export default fr

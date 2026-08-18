@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Character Engine Playground</title>
+<title>Grok Bot 角色 · 源码复刻</title>
 <style>
   :root {
     --paper: #ece7dc;
@@ -73,18 +73,14 @@
     box-shadow: inset 0 -8px 18px rgba(40, 30, 10, 0.08), 0 12px 28px rgba(0,0,0,.3);
   }
   .disk-login svg { width: 64px; height: 64px; overflow: visible; color-scheme: light; --bg: var(--disk); --fg: #111; }
-  .missing {
-    width: min(100%, 280px);
-    margin: 0 auto;
-    padding: 22px 18px;
-    border-radius: 16px;
-    background: #2a2823;
-    color: #d8d0c0;
-    font-size: 13px;
+  .disk-login span {
+    display: block;
+    margin-top: 8px;
+    font-size: 10px;
+    color: #8d877b;
+    text-align: center;
   }
-  .missing strong { display: block; margin-bottom: 8px; color: var(--accent); font-weight: 560; }
-  .missing a { color: var(--accent); }
-  .readout {
+  .readout, .hud {
     margin-top: 18px;
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -93,8 +89,15 @@
     color: #b7b1a4;
     font-size: 12px;
   }
-  .readout b { color: var(--paper); font-weight: 560; }
-  .modes { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .hud {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #2e2c27;
+    grid-template-columns: 1fr 1fr;
+    font-size: 11px;
+  }
+  .readout b, .hud b { color: var(--paper); font-weight: 560; }
+  .modes { display: flex; gap: 8px; margin-top: 16px; }
   button {
     appearance: none;
     border: 1px solid #3a372f;
@@ -107,7 +110,6 @@
   }
   button[aria-pressed="true"] { background: var(--accent); color: #1a1916; border-color: var(--accent); }
   button:hover { border-color: #6a6458; }
-  button:disabled { opacity: 0.45; cursor: not-allowed; }
   h2 {
     margin: 0 0 10px;
     font-size: 11px;
@@ -142,13 +144,19 @@
     border: 2px solid #111; cursor: pointer; padding: 0;
   }
   .swatch[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .icons { display: flex; gap: 16px; align-items: center; }
+  .icons figure { margin: 0; text-align: center; }
+  .icons img {
+    width: 72px; height: 72px; border-radius: 16px;
+    background: #111; display: block;
+  }
+  .icons figcaption { margin-top: 6px; font-size: 11px; color: var(--mute); }
   .note {
     color: #8d877b;
     font-size: 12px;
     max-width: 62ch;
   }
   .note code { color: #d8d0c0; font-size: 11px; }
-  [hidden] { display: none !important; }
   @media (max-width: 860px) {
     main { grid-template-columns: 1fr; }
     .stage { position: static; }
@@ -157,29 +165,21 @@
 </head>
 <body>
 <header>
-  <h1>Character Engine</h1>
-  <p>非官方弹簧角色机芯 · 几何不随仓库分发</p>
+  <h1>Grok Bot Character</h1>
+  <p>从 Grok Bot.app v0.18.0 的 app.asar 抽出 · 个人学习用 · <a href="showcase.html" style="color:#e8d7a4">录屏展示</a> · <a href="embed.html" style="color:#e8d7a4">最小嵌入</a></p>
 </header>
 <main>
   <aside class="stage">
-    <div id="ready-stage">
-      <div class="stage-disks">
-        <div class="disk" id="disk">
-          <svg id="bot" role="img" aria-label="Character preview"></svg>
-        </div>
-        <div>
-          <div class="disk-login">
-            <svg id="bot64" role="img" aria-label="Login size 64px"></svg>
-          </div>
-          <span style="display:block;margin-top:8px;font-size:10px;color:#8d877b;text-align:center">登录 sizePx: 64</span>
-        </div>
+    <div class="stage-disks">
+      <div class="disk" id="disk">
+        <svg id="bot" role="img" aria-label="Grok Bot character"></svg>
       </div>
-    </div>
-    <div class="missing" id="missing-geo" hidden>
-      <strong>几何未加载</strong>
-      本仓库不包含 <code>geometry-data.js</code>。把符合
-      <a href="geometry.schema.md">geometry.schema.md</a>
-      的数据放到同目录后刷新，即可本地预览。不要提交或再分发从商业应用抽出的造型。
+      <div>
+        <div class="disk-login">
+          <svg id="bot64" role="img" aria-label="Login size 64px"></svg>
+        </div>
+        <span style="display:block;margin-top:8px;font-size:10px;color:#8d877b;text-align:center">登录 sizePx: 64</span>
+      </div>
     </div>
     <div class="modes">
       <button id="mode-onboard" aria-pressed="true">登录轮换</button>
@@ -193,33 +193,57 @@
       <button id="act-burst">粒子</button>
     </div>
     <div class="readout">
-      <div>状态 <b id="r-state">—</b></div>
-      <div>眼睛 <b id="r-eye">—</b></div>
-      <div>旋转 <b id="r-spin">—</b></div>
-      <div>挤压 <b id="r-squash">—</b></div>
+      <div>状态 <b id="r-state">idle</b></div>
+      <div>眼睛 <b id="r-eye">0 → 0</b></div>
+      <div>旋转 <b id="r-spin">0.00°</b></div>
+      <div>挤压 <b id="r-squash">1.000</b></div>
       <div>overlay <b id="r-ov">—</b></div>
+    </div>
+    <div class="hud" id="hud">
+      <div>overlay.x <b id="h-ox">0</b></div>
+      <div>trick <b id="h-trick">—</b></div>
+      <div>shapeSpring <b id="h-shape">1</b></div>
+      <div>notify <b id="h-notify">0</b></div>
+      <div>blink <b id="h-blink">1</b></div>
+      <div>badge <b id="h-badge">—</b></div>
     </div>
   </aside>
   <div>
     <section>
-      <h2>情绪状态 · 39 态</h2>
+      <h2>情绪状态 · 源码 39 态</h2>
       <div id="states"></div>
     </section>
-    <section id="shapes-section" hidden>
-      <h2>身形</h2>
+    <section>
+      <h2>身形 · Jo 几何生成器</h2>
       <div class="shapes" id="shapes"></div>
     </section>
-    <section id="swatches-section" hidden>
-      <h2>墨色</h2>
+    <section>
+      <h2>墨色 · snt 调色板</h2>
       <div class="swatches" id="swatches"></div>
     </section>
     <section>
-      <h2>这是机芯，不是素材包</h2>
+      <h2>Dock 静态商标（位图，不是角色引擎）</h2>
+      <div class="icons">
+        <figure>
+          <img src="../assets/icon.iconset/icon_128x128@2x.png" alt="Dock icon 256" />
+          <figcaption>icon.icns 256</figcaption>
+        </figure>
+        <figure>
+          <img src="../assets/app-icon-256.png" alt="In-app icon" />
+          <figcaption>asar app-icon</figcaption>
+        </figure>
+      </div>
+    </section>
+    <section>
+      <h2>这不是截图描摹</h2>
       <p class="note">
-        引擎拆在 <code>src/</code>：math / tables / pose / tricks / eyes / fx / character。
-        有几何时，右侧 64px 带登录包装；thinking / orbit / writing / loading 等会切 overlay。
-        首屏从 curious 起播，点「登录轮换」则按 onboarding 从 idle 重来。
-        大预览默认开指针跟随。
+        引擎按源码 <code>$_t</code> + 登录包装 <code>sd()</code> 拆在
+        <code>src/</code>：math / tables / pose / tricks / eyes / fx / character。
+        右侧 64px 带 <code>pose.scale ≈ 1.04</code>。thinking / orbit / writing / loading
+        等会切 overlay；celebrate 会 <code>spinWild</code>；换身形走弹簧并轮换一记特技。
+        大预览从 curious 起播；右侧 64px 登录盘按 <code>pjn(0)=idle</code>。点「登录轮换」两颗都从 idle 重来。
+        大预览默认开指针跟随；源码 <code>sd().isFollowingPointer</code> 默认关。
+        别的项目请看 <a href="embed.html"><code>embed.html</code></a> 和 <code>GROK.create</code>。
       </p>
     </section>
   </div>
@@ -232,30 +256,20 @@
 <script src="src/fx.js"></script>
 <script src="src/eyes.js"></script>
 <script src="src/character.js"></script>
+<script src="src/api.js"></script>
 <script>
-  function hasUsableGeo(geo) {
-    return !!(
-      geo &&
-      typeof geo.Re === "number" &&
-      Array.isArray(geo.eyes) &&
-      geo.eyes.length > 0 &&
-      geo.shapes &&
-      Object.keys(geo.shapes).length > 0
-    );
-  }
-
-  const ready = hasUsableGeo(window.GROK_GEO);
-  document.getElementById("missing-geo").hidden = ready;
-  document.getElementById("ready-stage").hidden = !ready;
-  document.querySelectorAll("#mode-onboard, #mode-hold, #opt-follow, #opt-emphasis, #act-spin, #act-bounce, #act-burst")
-    .forEach((el) => { el.disabled = !ready; });
-
   const readout = {
     state: document.getElementById("r-state"),
     eye: document.getElementById("r-eye"),
     spin: document.getElementById("r-spin"),
     squash: document.getElementById("r-squash"),
     ov: document.getElementById("r-ov"),
+    ox: document.getElementById("h-ox"),
+    trick: document.getElementById("h-trick"),
+    shape: document.getElementById("h-shape"),
+    notify: document.getElementById("h-notify"),
+    blink: document.getElementById("h-blink"),
+    badge: document.getElementById("h-badge"),
   };
   const stateRoot = document.getElementById("states");
   function paintReadout(s) {
@@ -264,6 +278,13 @@
     readout.spin.textContent = `${s.spin.toFixed(2)}°`;
     readout.squash.textContent = s.squash.toFixed(3);
     if (readout.ov) readout.ov.textContent = s.overlay || "—";
+    if (!readout.ox) return;
+    readout.ox.textContent = (s.overlayX ?? 0).toFixed(3);
+    readout.trick.textContent = s.trick || "—";
+    readout.shape.textContent = (s.shapeSpring ?? 1).toFixed(3);
+    readout.notify.textContent = (s.notify ?? 0).toFixed(3);
+    readout.blink.textContent = (s.blink ?? 1).toFixed(3);
+    readout.badge.textContent = s.badge ? `${s.badge.x.toFixed(1)}, ${s.badge.y.toFixed(1)}` : "—";
   }
   function markState(name) {
     stateRoot.querySelectorAll("button").forEach((b) => {
@@ -275,8 +296,7 @@
     document.getElementById("mode-hold").setAttribute("aria-pressed", mode === "hold");
   }
 
-  const groups = window.GROK_META?.groups || window.GROK_TABLES?.GROUPS || [];
-  groups.forEach((group) => {
+  GROK_META.groups.forEach((group) => {
     const h = document.createElement("h2");
     h.textContent = group.label;
     h.style.marginTop = "8px";
@@ -287,10 +307,8 @@
       const b = document.createElement("button");
       b.textContent = name;
       b.dataset.state = name;
-      b.disabled = !ready;
       b.addEventListener("click", () => {
-        if (!window.__bots) return;
-        window.__bots.forEach((el) => {
+        bots.forEach((el) => {
           el.setMode("hold");
           el.setState(name, { resetEyes: false });
         });
@@ -301,84 +319,74 @@
     stateRoot.appendChild(row);
   });
 
-  if (!ready) {
-    // Engine tables still render as documentation. Live character stays off.
-  } else {
-    const shared = { mode: "onboarding", shape: "blob", color: "black", scheme: "light", loginWrap: true };
-    const bot = new GrokCharacter(document.getElementById("bot"), {
-      ...shared,
-      followPointer: true,
-      onChange(snap) { paintReadout(snap); markState(snap.state); },
-    });
-    const bot64 = new GrokCharacter(document.getElementById("bot64"), { ...shared, sizePx: 64 });
-    const bots = [bot, bot64];
-    window.__bots = bots;
-    bots.forEach((el) => {
-      el.moodN = 1;
-      el.setState("curious", { resetEyes: true });
-    });
-    setInterval(() => paintReadout(bot.snapshot()), 80);
+  const shared = { mode: "onboarding", shape: "blob", color: "black", scheme: "light", loginWrap: true };
+  const stage = GROK.create(document.getElementById("bot"), {
+    ...shared,
+    followPointer: true,
+    onChange(snap) { paintReadout(snap); markState(snap.state); },
+  });
+  const login = GROK.create(document.getElementById("bot64"), { ...shared, sizePx: 64 });
+  const bot = stage.bot;
+  const bot64 = login.bot;
+  const bots = [bot, bot64];
+  window.__bots = bots;
+  bot.moodN = 1;
+  bot.setState("curious", { resetEyes: true });
+  setInterval(() => paintReadout(bot.snapshot()), 80);
 
-    const shapeRoot = document.getElementById("shapes");
-    document.getElementById("shapes-section").hidden = false;
-    Object.entries(GROK_GEO.shapes).forEach(([id, shape]) => {
-      const b = document.createElement("button");
-      b.className = "shape";
-      b.dataset.shape = id;
-      b.innerHTML = `<svg viewBox="-15 -15 259 259"><path d="${shape.path}" style="fill:var(--fg)"></path></svg><span>${shape.label}</span>`;
-      b.addEventListener("click", () => {
-        bots.forEach((el) => el.setShape(id));
-        shapeRoot.querySelectorAll("button").forEach((el) => {
-          el.setAttribute("aria-pressed", el === b ? "true" : "false");
-        });
+  const shapeRoot = document.getElementById("shapes");
+  Object.entries(GROK_GEO.shapes).forEach(([id, shape]) => {
+    const b = document.createElement("button");
+    b.className = "shape";
+    b.dataset.shape = id;
+    b.innerHTML = `<svg viewBox="-15 -15 259 259"><path d="${shape.path}" style="fill:var(--fg)"></path></svg><span>${shape.label}</span>`;
+    b.addEventListener("click", () => {
+      bots.forEach((el) => el.setShape(id));
+      shapeRoot.querySelectorAll("button").forEach((el) => {
+        el.setAttribute("aria-pressed", el === b ? "true" : "false");
       });
-      if (id === "blob") b.setAttribute("aria-pressed", "true");
-      shapeRoot.appendChild(b);
     });
+    if (id === "blob") b.setAttribute("aria-pressed", "true");
+    shapeRoot.appendChild(b);
+  });
 
-    const swatchRoot = document.getElementById("swatches");
-    document.getElementById("swatches-section").hidden = false;
-    Object.entries(GROK_GEO.palette).forEach(([id, pal]) => {
-      const b = document.createElement("button");
-      b.className = "swatch";
-      b.title = id;
-      b.style.background = pal.light;
-      b.addEventListener("click", () => {
-        bots.forEach((el) => el.setColor(id, "light"));
-        swatchRoot.querySelectorAll("button").forEach((el) => {
-          el.setAttribute("aria-pressed", el === b ? "true" : "false");
-        });
+  const swatchRoot = document.getElementById("swatches");
+  Object.entries(GROK_GEO.palette).forEach(([id, pal]) => {
+    const b = document.createElement("button");
+    b.className = "swatch";
+    b.title = id;
+    b.style.background = pal.light;
+    b.addEventListener("click", () => {
+      bots.forEach((el) => el.setColor(id, "light"));
+      swatchRoot.querySelectorAll("button").forEach((el) => {
+        el.setAttribute("aria-pressed", el === b ? "true" : "false");
       });
-      if (id === "black") b.setAttribute("aria-pressed", "true");
-      swatchRoot.appendChild(b);
     });
-  }
+    if (id === "black") b.setAttribute("aria-pressed", "true");
+    swatchRoot.appendChild(b);
+  });
 
   document.getElementById("mode-onboard").onclick = () => {
-    if (!window.__bots) return;
-    window.__bots.forEach((el) => el.setMode("onboarding"));
+    bots.forEach((el) => el.setMode("onboarding"));
     syncModes("onboarding");
   };
   document.getElementById("mode-hold").onclick = () => {
-    if (!window.__bots) return;
-    window.__bots.forEach((el) => el.setMode("hold"));
+    bots.forEach((el) => el.setMode("hold"));
     syncModes("hold");
   };
   document.getElementById("opt-follow").onclick = () => {
-    if (!window.__bots) return;
     const on = document.getElementById("opt-follow").getAttribute("aria-pressed") !== "true";
     document.getElementById("opt-follow").setAttribute("aria-pressed", on ? "true" : "false");
-    window.__bots.forEach((el) => el.setFollowPointer(on));
+    bots.forEach((el) => el.setFollowPointer(on));
   };
   document.getElementById("opt-emphasis").onclick = () => {
-    if (!window.__bots) return;
     const on = document.getElementById("opt-emphasis").getAttribute("aria-pressed") !== "true";
     document.getElementById("opt-emphasis").setAttribute("aria-pressed", on ? "true" : "false");
-    window.__bots.forEach((el) => el.setEmphasis(on));
+    bots.forEach((el) => el.setEmphasis(on));
   };
-  document.getElementById("act-spin").onclick = () => window.__bots?.forEach((el) => el.spinOnce(1));
-  document.getElementById("act-bounce").onclick = () => window.__bots?.forEach((el) => el.bounceOnce());
-  document.getElementById("act-burst").onclick = () => window.__bots?.forEach((el) => el.burstOnce());
+  document.getElementById("act-spin").onclick = () => bots.forEach((el) => el.spinOnce(1));
+  document.getElementById("act-bounce").onclick = () => bots.forEach((el) => el.bounceOnce());
+  document.getElementById("act-burst").onclick = () => bots.forEach((el) => el.burstOnce());
 </script>
 </body>
 </html>

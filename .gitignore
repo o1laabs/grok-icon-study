@@ -1,5 +1,10 @@
 .DS_Store
 *.log
+node_modules
+dist
+
+# Local study notes (full personal README)
+README.local.md
 
 # Local-only character data. Do not commit extracted or third-party geometry.
 replica/geometry-data.js
@@ -9,5 +14,7 @@ replica/grok-blob-idle.svg
 /tmp/
 snap-out/
 
-# Never commit unpacked app dumps
+# Never commit unpacked app dumps, unpack scripts, or third-party marks
 extracted/
+extract-asar.js
+assets/

@@ -1,0 +1,27 @@
+{
+  "name": "grok-icon-study",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Study site for a spring-driven character engine. Bloub-like presentation, replica motion.",
+  "license": "MIT",
+  "packageManager": "pnpm@11.17.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "mediabunny": "^1.55.1",
+    "vue": "^3.5.41"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.0.0",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.1",
+    "vue-tsc": "^3.3.9"
+  }
+}

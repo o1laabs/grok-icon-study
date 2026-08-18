@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Grok Bot · 录屏展示</title>
+<style>
+  :root {
+    --chrome: rgba(226, 220, 205, 0.92);
+    --chrome-ink: #3a362e;
+    --hairline: rgba(58, 54, 46, 0.16);
+    --surround: #12110f;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font: 14px/1.5 "SF Pro Text", "PingFang SC", "Hiragino Sans GB", sans-serif;
+    background: var(--surround);
+    overflow: hidden;
+  }
+  body.hide-ui, body.hide-ui * { cursor: none !important; }
+
+  .frame { position: fixed; inset: 0; display: grid; place-items: center; }
+
+  .stage {
+    position: relative;
+    background: var(--stage-bg, #ece7dc);
+    transition: background 720ms var(--ease);
+    overflow: hidden;
+    --cap-ink: #3c382f;
+    --cap-mute: #8a8375;
+    --cap-display: "Songti SC", "Iowan Old Style", "Palatino Linotype", Palatino, "PingFang SC", serif;
+  }
+  body[data-tone="night"] .stage { --cap-ink: #e4ddcf; --cap-mute: #8d8678; }
+
+  .stage.r169 { width: min(100vw, calc(100vh * 16 / 9));  height: min(100vh, calc(100vw * 9 / 16)); }
+  .stage.r11  { width: min(100vw, 100vh);                 height: min(100vw, 100vh); }
+  .stage.r916 { width: min(100vw, calc(100vh * 9 / 16));  height: min(100vh, calc(100vw * 16 / 9)); }
+
+  .cast { position: absolute; inset: 0; }
+
+  .bot-host {
+    position: absolute;
+    left: 50%; top: 46%;
+    transform: translate(-50%, -50%);
+    height: 54%;
+    max-width: 82%;
+    aspect-ratio: 1;
+    overflow: visible;
+    color-scheme: light;
+    --disk: var(--stage-bg, #ece7dc);
+    --bg: var(--stage-bg, #ece7dc);
+    transition:
+      left 860ms var(--ease),
+      top 860ms var(--ease),
+      bottom 860ms var(--ease),
+      height 860ms var(--ease),
+      transform 860ms var(--ease),
+      opacity 420ms ease;
+  }
+  body[data-tone="night"] .bot-host { color-scheme: dark; }
+  .bot-host svg { width: 100%; height: 100%; overflow: visible; }
+  .bot-host.echo { opacity: 0; visibility: hidden; pointer-events: none; }
+  .bot-host.echo.on { opacity: 1; visibility: visible; }
+
+  /* —— compositions —— */
+  [data-compose="close"] .lead { top: 48%; height: 80%; max-width: 94%; }
+  [data-compose="left"] .lead { left: 28%; top: 50%; height: 64%; }
+  [data-compose="right"] .lead { left: 72%; top: 50%; height: 64%; }
+  [data-compose="void"] .lead { top: 46%; height: 17%; }
+  [data-compose="postage"] .lead { left: 80%; top: 20%; height: 20%; }
+  [data-compose="folio"] .lead { left: 68%; top: 58%; height: 56%; }
+  [data-compose="dock"] .lead {
+    left: 22%; top: auto; bottom: 12%;
+    transform: translate(-50%, 0);
+    height: 34%;
+  }
+  [data-compose="chorus"] .lead { left: 22%; top: 46%; height: 34%; }
+  [data-compose="chorus"] .echo.b { left: 50%; top: 46%; height: 34%; }
+  [data-compose="chorus"] .echo.c { left: 78%; top: 46%; height: 34%; }
+  [data-compose="duet"] .lead { left: 36%; top: 50%; height: 58%; }
+  [data-compose="duet"] .echo.b { left: 72%; top: 64%; height: 26%; }
+
+  .caption {
+    position: absolute;
+    left: 50%; bottom: 8.5%;
+    transform: translateX(-50%);
+    max-width: 78%;
+    text-align: center;
+    color: var(--cap-ink);
+    opacity: 0;
+    transition:
+      opacity 420ms ease,
+      left 860ms var(--ease),
+      right 860ms var(--ease),
+      top 860ms var(--ease),
+      bottom 860ms var(--ease),
+      transform 860ms var(--ease);
+    pointer-events: none;
+  }
+  .caption.show { opacity: 1; }
+  .caption .no {
+    display: none;
+    font-family: "Didot", "Bodoni 72", "Songti SC", serif;
+    font-size: clamp(52px, 11vmin, 128px);
+    font-weight: 400;
+    letter-spacing: -0.045em;
+    line-height: 0.82;
+    margin-bottom: 0.18em;
+  }
+  .caption .kicker {
+    display: block;
+    margin-bottom: 0.55em;
+    font-size: clamp(9px, 1.25vmin, 11px);
+    letter-spacing: 0.42em;
+    text-transform: uppercase;
+    color: var(--cap-mute);
+  }
+  .caption .zh {
+    display: block;
+    font-family: var(--cap-display);
+    font-size: clamp(22px, 3.8vmin, 40px);
+    font-weight: 600;
+    letter-spacing: 0.18em;
+  }
+  .caption .en {
+    display: block;
+    margin-top: 0.45em;
+    font-size: clamp(10px, 1.45vmin, 13px);
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--cap-mute);
+  }
+
+  [data-compose="left"] .caption {
+    left: auto; right: 9%; top: 38%; bottom: auto;
+    transform: none;
+    text-align: right; max-width: 36%;
+  }
+  [data-compose="right"] .caption {
+    left: 7%; right: auto; top: 50%; bottom: auto;
+    transform: translateY(-50%);
+    text-align: left; max-width: 36%;
+  }
+  [data-compose="close"] .caption {
+    left: 6.5%; bottom: 7%; transform: none;
+    text-align: left; max-width: 46%;
+  }
+  [data-compose="close"] .caption .zh { font-size: clamp(18px, 2.8vmin, 28px); }
+  [data-compose="postage"] .caption {
+    left: 7%; bottom: 14%; transform: none;
+    text-align: left; max-width: 62%;
+  }
+  [data-compose="postage"] .caption .zh {
+    font-size: clamp(32px, 6.4vmin, 72px);
+    letter-spacing: 0.12em;
+  }
+  [data-compose="folio"] .caption {
+    left: 7%; top: 14%; bottom: auto; transform: none;
+    text-align: left; max-width: 48%;
+  }
+  [data-compose="folio"] .caption .no { display: block; }
+  [data-compose="folio"] .caption .zh {
+    font-size: clamp(34px, 6.6vmin, 76px);
+    letter-spacing: 0.1em;
+  }
+  [data-compose="void"] .caption { bottom: 22%; }
+  [data-compose="void"] .caption .zh { font-size: clamp(16px, 2.4vmin, 24px); }
+  [data-compose="dock"] .caption {
+    left: auto; right: 8%; top: 18%; bottom: auto;
+    transform: none; text-align: right; max-width: 48%;
+  }
+  [data-compose="chorus"] .caption,
+  [data-compose="duet"] .caption { bottom: 7.5%; }
+
+  .stage.r916[data-compose="left"] .lead,
+  .stage.r916[data-compose="right"] .lead {
+    left: 50%; top: 34%; height: unset; width: 62%; max-width: 72%;
+  }
+  .stage.r916[data-compose="left"] .caption,
+  .stage.r916[data-compose="right"] .caption,
+  .stage.r916[data-compose="dock"] .caption {
+    left: 8%; right: 8%; top: auto; bottom: 12%;
+    transform: none; text-align: center; max-width: none;
+  }
+  .stage.r916[data-compose="folio"] .lead {
+    left: 50%; top: 58%; height: unset; width: 58%; max-width: 70%;
+  }
+  .stage.r916[data-compose="folio"] .caption { left: 8%; top: 9%; max-width: 84%; }
+  .stage.r916[data-compose="dock"] .lead {
+    left: 50%; bottom: 22%; height: unset; width: 42%; max-width: 48%;
+  }
+  .stage.r916[data-compose="postage"] .lead {
+    left: 78%; top: 16%; height: unset; width: 22%; max-width: 24%;
+  }
+  .stage.r916[data-compose="postage"] .caption { max-width: 84%; }
+  .stage.r916[data-compose="chorus"] .lead,
+  .stage.r916[data-compose="chorus"] .echo.b,
+  .stage.r916[data-compose="chorus"] .echo.c {
+    top: 36%; height: unset; width: 26%; max-width: 26%;
+  }
+  .stage.r916[data-compose="duet"] .lead {
+    left: 38%; top: 36%; height: unset; width: 46%; max-width: 50%;
+  }
+  .stage.r916[data-compose="duet"] .echo.b {
+    left: 76%; top: 52%; height: unset; width: 24%; max-width: 26%;
+  }
+  .stage.r916[data-compose="close"] .lead {
+    top: 38%; height: unset; width: 78%; max-width: 86%;
+  }
+  .stage.r916[data-compose="void"] .lead {
+    height: unset; width: 22%; max-width: 24%;
+  }
+  .stage.r916[data-compose="hero"] .lead {
+    height: unset; width: 58%; max-width: 68%;
+  }
+
+  @media (max-width: 900px) {
+    .chrome {
+      max-width: calc(100vw - 20px);
+      flex-wrap: wrap;
+      justify-content: center;
+      border-radius: 18px;
+      row-gap: 2px;
+    }
+    .chrome .chapter-name { min-width: auto; }
+    .hint { display: none; }
+  }
+
+  .progress {
+    position: absolute;
+    left: 50%; bottom: 3.2%;
+    transform: translateX(-50%);
+    display: flex; gap: 7px;
+    opacity: 0;
+    transition: opacity 300ms ease;
+    pointer-events: none;
+  }
+  .progress.show { opacity: 0.8; }
+  .progress i {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--cap-mute);
+    opacity: 0.38;
+    transition: all 260ms ease;
+  }
+  .progress i.on { background: var(--cap-ink); opacity: 0.9; transform: scale(1.3); }
+
+  .title-card {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    background: var(--stage-bg, #ece7dc);
+    transition: opacity 700ms ease, visibility 700ms;
+    z-index: 3;
+  }
+  .title-card.out { opacity: 0; visibility: hidden; pointer-events: none; }
+  .title-card .inner { text-align: center; padding: 0 8%; }
+  .title-card h1 {
+    margin: 0;
+    font-family: var(--cap-display);
+    font-size: clamp(36px, 8vmin, 84px);
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    color: var(--cap-ink);
+  }
+  .title-card p {
+    margin: 1.1em 0 0;
+    font-size: clamp(11px, 1.7vmin, 14px);
+    letter-spacing: 0.36em;
+    color: var(--cap-mute);
+  }
+
+  .hint {
+    position: fixed;
+    top: 16px; right: 20px;
+    color: #8d877b;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    transition: opacity 400ms ease;
+    z-index: 9;
+    user-select: none;
+  }
+  .hint kbd {
+    font: 600 10px/1 ui-monospace, Menlo, monospace;
+    padding: 2px 5px;
+    border-radius: 4px;
+    border: 1px solid #3a372f;
+    background: #22211d;
+    color: #b7b1a4;
+  }
+
+  .chrome {
+    position: fixed;
+    left: 50%; bottom: 20px;
+    transform: translateX(-50%);
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: var(--chrome);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--hairline);
+    transition: opacity 320ms ease, transform 320ms ease;
+    z-index: 10;
+  }
+  .chrome.hidden { opacity: 0; transform: translateX(-50%) translateY(14px); pointer-events: none; }
+  .chrome button {
+    appearance: none; border: none; background: none;
+    color: var(--chrome-ink);
+    font: 600 12px/1 inherit;
+    letter-spacing: 0.04em;
+    padding: 7px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    opacity: 0.78;
+    transition: opacity 150ms ease, background 150ms ease;
+  }
+  .chrome button:hover { opacity: 1; background: rgba(58, 54, 46, 0.08); }
+  .chrome button[aria-pressed="true"] { opacity: 1; background: rgba(58, 54, 46, 0.14); }
+  .chrome button.icon { font-size: 13px; padding: 7px 9px; }
+  .chrome .sep { width: 1px; height: 18px; background: var(--hairline); margin: 0 4px; }
+  .chrome .chapter-name {
+    font-size: 11px; letter-spacing: 0.14em;
+    color: var(--chrome-ink);
+    opacity: 0.7;
+    min-width: 6.5em; text-align: center;
+  }
+
+  .toast {
+    position: fixed;
+    top: 16px; left: 50%;
+    transform: translateX(-50%) translateY(-8px);
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: var(--chrome);
+    border: 1px solid var(--hairline);
+    color: var(--chrome-ink);
+    font-size: 12px; letter-spacing: 0.08em;
+    opacity: 0;
+    transition: all 260ms ease;
+    z-index: 11;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .console-tab {
+    position: fixed;
+    right: 0; top: 50%;
+    transform: translateY(-50%);
+    writing-mode: vertical-rl;
+    padding: 14px 8px 18px;
+    border-radius: 10px 0 0 10px;
+    background: var(--chrome);
+    border: 1px solid var(--hairline);
+    border-right: none;
+    color: var(--chrome-ink);
+    font-size: 11px; letter-spacing: 0.3em;
+    cursor: pointer;
+    user-select: none;
+    opacity: 0.85;
+    transition: opacity 300ms ease;
+    z-index: 12;
+  }
+  .console-tab:hover { opacity: 1; }
+  .console {
+    position: fixed;
+    right: 14px; top: 14px; bottom: 14px;
+    width: 300px;
+    display: flex; flex-direction: column;
+    border-radius: 16px;
+    background: rgba(28, 26, 22, 0.92);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 250, 235, 0.09);
+    color: #d8d2c4;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+    transform: translateX(24px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 260ms ease, transform 260ms ease, visibility 260ms;
+    z-index: 13;
+  }
+  .console.open { transform: none; opacity: 1; visibility: visible; }
+  .console header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px 10px;
+    flex: none;
+  }
+  .console header b {
+    font-size: 11px; font-weight: 640;
+    letter-spacing: 0.28em; text-transform: uppercase;
+    color: #b7b1a4;
+  }
+  .console header button {
+    appearance: none; border: none; background: none;
+    color: #8d877b; font-size: 15px; cursor: pointer; padding: 2px 6px;
+  }
+  .console header button:hover { color: #d8d2c4; }
+  .console .scroll {
+    overflow-y: auto; overscroll-behavior: contain;
+    padding: 0 16px 16px;
+    scrollbar-width: thin;
+    scrollbar-color: #4a453b transparent;
+  }
+  .console .scroll::-webkit-scrollbar { width: 4px; }
+  .console .scroll::-webkit-scrollbar-thumb { background: #4a453b; border-radius: 2px; }
+  .cgroup { margin-top: 14px; }
+  .cgroup > b {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 10px; font-weight: 640;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: #8d877b;
+  }
+  .crow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .cbtn {
+    appearance: none;
+    border: 1px solid rgba(255, 250, 235, 0.14);
+    background: rgba(255, 250, 235, 0.05);
+    color: #c9c3b5;
+    font: 500 11px/1 inherit;
+    padding: 6px 9px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 140ms ease;
+  }
+  .cbtn:hover { border-color: rgba(255, 250, 235, 0.35); color: #efe8d8; }
+  .cbtn[aria-pressed="true"], .cbtn.cur {
+    background: #e8d7a4;
+    border-color: #e8d7a4;
+    color: #1a1916;
+  }
+  .cgrid { display: flex; flex-wrap: wrap; gap: 5px; }
+  .cgroup + .cgroup { border-top: 1px solid rgba(255, 250, 235, 0.07); padding-top: 12px; }
+  .cgroup .glabel {
+    display: block;
+    margin: 8px 0 6px;
+    font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: #6d675d;
+  }
+  .cgroup .glabel:first-child { margin-top: 0; }
+  .speed-row { display: flex; align-items: center; gap: 10px; }
+  .speed-row input[type="range"] {
+    flex: 1; accent-color: #e8d7a4; height: 3px;
+  }
+  .speed-row output {
+    min-width: 3.2em; text-align: right;
+    font-size: 11px; font-variant-numeric: tabular-nums;
+    color: #b7b1a4;
+  }
+  .cap-input {
+    width: 100%;
+    appearance: none;
+    border: 1px solid rgba(255, 250, 235, 0.14);
+    background: rgba(255, 250, 235, 0.05);
+    color: #efe8d8;
+    font: 500 12px/1.4 inherit;
+    padding: 8px 10px;
+    border-radius: 8px;
+    outline: none;
+  }
+  .cap-input:focus { border-color: #e8d7a4; }
+  .cap-input::placeholder { color: #6d675d; }
+  .chint { margin: 6px 0 0; font-size: 10px; color: #6d675d; line-height: 1.5; }
+
+  body.hide-ui .hint,
+  body.hide-ui .chrome,
+  body.hide-ui .toast,
+  body.hide-ui .console-tab,
+  body.hide-ui .console { opacity: 0 !important; pointer-events: none !important; }
+</style>
+</head>
+<body data-tone="paper">
+<div class="frame">
+  <div class="stage r169" id="stage" data-compose="hero" style="--stage-bg:#ece7dc">
+    <div class="cast" id="cast">
+      <div class="bot-host lead" id="botHost"></div>
+      <div class="bot-host echo b" id="botHostB"></div>
+      <div class="bot-host echo c" id="botHostC"></div>
+    </div>
+    <div class="caption" id="caption">
+      <span class="no" id="capNo"></span>
+      <span class="kicker" id="capKicker"></span>
+      <span class="zh" id="capZh"></span>
+      <span class="en" id="capEn"></span>
+    </div>
+    <div class="progress" id="progress"></div>
+    <div class="title-card out" id="titleCard">
+      <div class="inner">
+        <h1>GROK</h1>
+        <p>一小团会眨眼的墨</p>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="hint" id="hint">
+  <kbd>Space</kbd> 暂停 · <kbd>←</kbd><kbd>→</kbd> 换镜 · <kbd>P</kbd> 节目 · <kbd>A</kbd> 画幅 · <kbd>T</kbd> 底色 · <kbd>M</kbd> 字幕 · <kbd>F</kbd> 全屏 · <kbd>C</kbd> 控制台 · <kbd>H</kbd> 隐藏
+</div>
+<div class="chrome" id="chrome">
+  <button class="icon" id="btnPlay" title="播放/暂停">⏸</button>
+  <button id="btnPrev" title="上一镜">‹ 镜</button>
+  <button id="btnNext" title="下一镜">镜 ›</button>
+  <div class="sep"></div>
+  <div class="chapter-name" id="chapterName">苏醒</div>
+  <div class="sep"></div>
+  <button id="btnProgram" aria-pressed="true" title="品味 lookbook / 图鉴轮播">品味</button>
+  <div class="sep"></div>
+  <button id="btnAr169" aria-pressed="true">16:9</button>
+  <button id="btnAr11" aria-pressed="false">1:1</button>
+  <button id="btnAr916" aria-pressed="false">9:16</button>
+  <div class="sep"></div>
+  <button id="btnTone" title="切换底色">换底色</button>
+  <button id="btnSubs" aria-pressed="true">字幕</button>
+  <button id="btnHide" title="隐藏所有界面">隐藏</button>
+</div>
+<div class="toast" id="toast"></div>
+
+<button class="console-tab" id="consoleTab" title="控制台 (C)">控制台</button>
+<aside class="console" id="console" aria-label="演示控制台">
+  <header>
+    <b>Console</b>
+    <button id="consoleClose" title="收起 (C)">✕</button>
+  </header>
+  <div class="scroll">
+    <div class="cgroup">
+      <div class="crow">
+        <button class="cbtn" id="cAuto" aria-pressed="true">自动播放</button>
+        <button class="cbtn" id="cManual">手动接管</button>
+      </div>
+      <div class="crow" style="margin-top:8px">
+        <button class="cbtn" id="cPlay">⏸ 暂停</button>
+        <button class="cbtn" id="cPrevShot">‹ 上一镜</button>
+        <button class="cbtn" id="cNextShot">下一镜 ›</button>
+      </div>
+      <div class="crow" style="margin-top:8px">
+        <button class="cbtn" id="cSpin">转一圈</button>
+        <button class="cbtn" id="cBounce">跳一下</button>
+        <button class="cbtn" id="cBurst">粒子</button>
+      </div>
+    </div>
+    <div class="cgroup">
+      <b>节目</b>
+      <div class="crow">
+        <button class="cbtn" id="cTaste">品味</button>
+        <button class="cbtn" id="cFilm">短片</button>
+        <button class="cbtn" id="cCatalog">图鉴</button>
+      </div>
+      <p class="chint">短片是豆荚→团→待机→睡眠→标题卡；品味按构图穿插；图鉴按类轮播。</p>
+    </div>
+    <div class="cgroup">
+      <b>章节</b>
+      <div class="cgrid" id="cChapters"></div>
+    </div>
+    <div class="cgroup">
+      <b>构图</b>
+      <div class="cgrid" id="cComposes"></div>
+    </div>
+    <div class="cgroup">
+      <b>速度</b>
+      <div class="speed-row">
+        <input type="range" id="cSpeed" min="0.25" max="2.5" step="0.25" value="1" />
+        <output id="cSpeedVal">1.0×</output>
+      </div>
+    </div>
+    <div class="cgroup">
+      <b>情绪 · 39 态</b>
+      <div id="cStates"></div>
+    </div>
+    <div class="cgroup">
+      <b>身形 · 18 形</b>
+      <div class="cgrid" id="cShapes"></div>
+    </div>
+    <div class="cgroup">
+      <b>墨色 · 11 色</b>
+      <div class="cgrid" id="cColors"></div>
+    </div>
+    <div class="cgroup">
+      <b>取景</b>
+      <div class="crow">
+        <button class="cbtn" data-ar="0">16:9</button>
+        <button class="cbtn" data-ar="1">1:1</button>
+        <button class="cbtn" data-ar="2">9:16</button>
+        <button class="cbtn" id="cTone">换底色</button>
+        <button class="cbtn" id="cSubs">字幕</button>
+        <button class="cbtn" id="cHide">隐藏界面</button>
+      </div>
+    </div>
+    <div class="cgroup">
+      <b>当前字幕</b>
+      <input class="cap-input" id="cCapZh" placeholder="中文字幕，回车应用" />
+      <input class="cap-input" id="cCapEn" placeholder="英文小字，回车应用" style="margin-top:6px" />
+      <p class="chint">留空则恢复本章默认字幕。手动接管后仍会显示。</p>
+    </div>
+  </div>
+</aside>
+
+<script>
+  document.currentScript.remove();
+  const V = Date.now();
+  ["geometry-data.js", "src/math.js", "src/tables.js", "src/pose.js", "src/tricks.js", "src/fx.js", "src/eyes.js", "src/character.js", "src/api.js"]
+    .forEach((src) => document.write(`<script src="${src}?v=${V}"><\/script>`));
+</script>
+<script>
+"use strict";
+
+const CAPS = {
+  spawning: { zh: "苏醒", en: "spawning" },
+  waking: { zh: "睁眼", en: "waking" },
+  idle: { zh: "待机", en: "idle" },
+  listening: { zh: "聆听", en: "listening" },
+  thinking: { zh: "思考", en: "thinking" },
+  searching: { zh: "检索", en: "searching" },
+  working: { zh: "工作", en: "working" },
+  orbit: { zh: "绕轨", en: "orbit" },
+  radar: { zh: "扫描", en: "radar" },
+  progress: { zh: "进度", en: "progress" },
+  humming: { zh: "轻鸣", en: "humming" },
+  loading: { zh: "加载", en: "loading" },
+  dictating: { zh: "听写", en: "dictating" },
+  writing: { zh: "书写", en: "writing" },
+  sending: { zh: "发送", en: "sending" },
+  receiving: { zh: "收信", en: "receiving" },
+  uploading: { zh: "上传", en: "uploading" },
+  notifying: { zh: "提醒", en: "notifying" },
+  alerting: { zh: "告警", en: "alerting" },
+  excited: { zh: "兴奋", en: "excited" },
+  surprised: { zh: "惊讶", en: "surprised" },
+  suspicious: { zh: "狐疑", en: "suspicious" },
+  angry: { zh: "生气", en: "angry" },
+  drowsy: { zh: "犯困", en: "drowsy" },
+  happy: { zh: "开心", en: "happy" },
+  curious: { zh: "好奇", en: "curious" },
+  confused: { zh: "困惑", en: "confused" },
+  bored: { zh: "无聊", en: "bored" },
+  proud: { zh: "得意", en: "proud" },
+  shy: { zh: "害羞", en: "shy" },
+  sad: { zh: "难过", en: "sad" },
+  laughing: { zh: "大笑", en: "laughing" },
+  scared: { zh: "受惊", en: "scared" },
+  playful: { zh: "顽皮", en: "playful" },
+  celebrate: { zh: "庆祝", en: "celebrate" },
+  "powering-down": { zh: "休眠", en: "powering down" },
+  sleeping: { zh: "睡眠", en: "sleeping" },
+  dragging: { zh: "拖拽", en: "dragging" },
+  bouncing: { zh: "蹦跳", en: "bouncing" },
+  blob: { zh: "团", en: "blob" },
+  pebble: { zh: "卵石", en: "pebble" },
+  bean: { zh: "豆荚", en: "bean" },
+  egg: { zh: "蛋形", en: "egg" },
+  squircle: { zh: "方圆", en: "squircle" },
+  tablet: { zh: "石板", en: "tablet" },
+  capsule: { zh: "胶囊", en: "capsule" },
+  cylinder: { zh: "圆筒", en: "cylinder" },
+  hex: { zh: "六角", en: "hex" },
+  gem: { zh: "宝石", en: "gem" },
+  crystal: { zh: "水晶", en: "crystal" },
+  wedge: { zh: "楔形", en: "wedge" },
+  shield: { zh: "盾形", en: "shield" },
+  dome: { zh: "穹顶", en: "dome" },
+  arch: { zh: "拱门", en: "arch" },
+  cloud: { zh: "云朵", en: "cloud" },
+  teardrop: { zh: "泪滴", en: "teardrop" },
+  leaf: { zh: "叶片", en: "leaf" },
+  black: { zh: "墨黑", en: "black" },
+  brown: { zh: "棕褐", en: "brown" },
+  red: { zh: "绯红", en: "red" },
+  orange: { zh: "暖橙", en: "orange" },
+  yellow: { zh: "杏黄", en: "yellow" },
+  green: { zh: "翠绿", en: "green" },
+  cyan: { zh: "青碧", en: "cyan" },
+  blue: { zh: "湛蓝", en: "blue" },
+  violet: { zh: "紫罗兰", en: "violet" },
+  magenta: { zh: "品红", en: "magenta" },
+  gray: { zh: "石墨", en: "gray" },
+  spin: { zh: "旋转", en: "spin" },
+  bounce: { zh: "弹跳", en: "bounce" },
+  burst: { zh: "粒子", en: "burst" },
+};
+
+const LOOK = (compose, spec) => ({ compose, type: "look", ...spec });
+
+const TASTE = [
+  { name: "苏醒", looks: [
+    { type: "title", compose: "hero", state: "spawning", shape: "blob", color: "black", tone: "paper", ms: 2600, cap: "spawning" },
+    LOOK("void",    { state: "spawning", shape: "blob", color: "black", tone: "paper", ms: 2800, kicker: "苏醒", zh: "先有一团墨", en: "it gathers" }),
+    LOOK("hero",    { state: "waking", shape: "blob", color: "black", tone: "paper", ms: 3300, kicker: "苏醒", zh: "然后它看见你", en: "then it sees you" }),
+    LOOK("close",   { state: "idle", shape: "blob", color: "black", tone: "paper", ms: 3200, kicker: "苏醒", zh: "停在这里", en: "still" }),
+  ] },
+  { name: "近观", looks: [
+    LOOK("left",    { state: "curious", shape: "blob", color: "black", tone: "cream", ms: 2800, kicker: "近观", zh: "探身", en: "leaning in" }),
+    LOOK("right",   { state: "playful", shape: "blob", color: "black", tone: "warm", ms: 2400, kicker: "近观", zh: "故意的", en: "on purpose" }),
+    LOOK("close",   { state: "angry", shape: "blob", color: "black", tone: "paper", ms: 2000, kicker: "近观", zh: "棱角", en: "edges" }),
+    LOOK("postage", { state: "shy", shape: "blob", color: "black", tone: "stone", ms: 3000, kicker: "近观", zh: "躲一躲", en: "tucked away" }),
+    LOOK("folio",   { state: "proud", shape: "blob", color: "black", tone: "night", ms: 3200, folio: "07", kicker: "近观", zh: "抬头", en: "chin up" }),
+    LOOK("left",    { state: "sad", shape: "blob", color: "black", tone: "night", ms: 3000, kicker: "近观", zh: "天气变了", en: "weather turns" }),
+    LOOK("hero",    { state: "laughing", shape: "blob", color: "black", tone: "cream", ms: 2200, act: "bounce", kicker: "近观", zh: "装不住", en: "can't hold it" }),
+    LOOK("close",   { state: "suspicious", shape: "blob", color: "black", tone: "night", ms: 2600, kicker: "近观", zh: "侧目", en: "side-eye" }),
+    LOOK("dock",    { state: "bored", shape: "blob", color: "black", tone: "stone", ms: 2800, kicker: "近观", zh: "算了", en: "never mind" }),
+    LOOK("right",   { state: "happy", shape: "blob", color: "black", tone: "cream", ms: 2400, kicker: "近观", zh: "新叶子", en: "new leaf" }),
+    LOOK("postage", { state: "surprised", shape: "blob", color: "black", tone: "warm", ms: 2200, kicker: "近观", zh: "啊", en: "oh" }),
+    LOOK("close",   { state: "confused", shape: "blob", color: "black", tone: "paper", ms: 2600, kicker: "近观", zh: "想不通", en: "doesn't add up" }),
+  ] },
+  { name: "形色", looks: [
+    LOOK("left",    { state: "thinking", shape: "blob", color: "black", tone: "cream", ms: 2800, kicker: "形色", zh: "在里头", en: "inside" }),
+    LOOK("dock",    { state: "working", shape: "blob", color: "black", tone: "stone", ms: 2800, kicker: "形色", zh: "埋头", en: "heads down" }),
+    LOOK("close",   { state: "orbit", shape: "blob", color: "black", tone: "night", ms: 3000, kicker: "形色", zh: "绕一圈", en: "around" }),
+    LOOK("right",   { state: "searching", shape: "blob", color: "black", tone: "paper", ms: 2600, kicker: "形色", zh: "找", en: "looking" }),
+    LOOK("void",    { state: "humming", shape: "blob", color: "black", tone: "paper", ms: 2800, kicker: "形色", zh: "轻鸣", en: "a hum" }),
+    LOOK("left",    { state: "writing", shape: "blob", color: "black", tone: "cream", ms: 2600, kicker: "形色", zh: "记下", en: "take this down" }),
+    LOOK("hero",    { state: "radar", shape: "blob", color: "black", tone: "night", ms: 2800, kicker: "形色", zh: "扫过", en: "sweep" }),
+    LOOK("postage", { state: "listening", shape: "blob", color: "black", tone: "stone", ms: 2600, kicker: "形色", zh: "听着", en: "listening" }),
+    LOOK("close",   { state: "progress", shape: "blob", color: "black", tone: "night", ms: 2600, kicker: "形色", zh: "一点一点", en: "bit by bit" }),
+    LOOK("right",   { state: "notifying", shape: "blob", color: "black", tone: "paper", ms: 2200, kicker: "形色", zh: "叮", en: "ping" }),
+    LOOK("folio",   { state: "alerting", shape: "blob", color: "black", tone: "night", ms: 2400, folio: "18", kicker: "形色", zh: "醒一醒", en: "heads up" }),
+    LOOK("left",    { state: "loading", shape: "blob", color: "black", tone: "stone", ms: 2600, kicker: "形色", zh: "还没好", en: "not yet" }),
+    LOOK("hero",    { state: "celebrate", shape: "blob", color: "black", tone: "cream", ms: 5700, kicker: "形色", zh: "好了", en: "there" }),
+    LOOK("close",   { state: "scared", shape: "blob", color: "black", tone: "paper", ms: 2000, kicker: "形色", zh: "谁", en: "who" }),
+    LOOK("dock",    { state: "drowsy", shape: "blob", color: "black", tone: "night", ms: 3000, kicker: "形色", zh: "眼皮", en: "lids" }),
+    LOOK("left",    { state: "excited", shape: "blob", color: "black", tone: "warm", ms: 2200, kicker: "形色", zh: "按捺不住", en: "can't sit still" }),
+    LOOK("postage", { state: "uploading", shape: "blob", color: "black", tone: "cream", ms: 2400, kicker: "形色", zh: "送上去", en: "sending up" }),
+    LOOK("right",   { state: "receiving", shape: "blob", color: "black", tone: "paper", ms: 2400, kicker: "形色", zh: "接着", en: "catch" }),
+    LOOK("void",    { state: "dictating", shape: "blob", color: "black", tone: "stone", ms: 2600, kicker: "形色", zh: "你说", en: "you talk" }),
+  ] },
+  { name: "群像", looks: [
+    LOOK("chorus", {
+      state: "happy", shape: "blob", color: "black", tone: "cream", ms: 3600,
+      kicker: "群像", zh: "三个性子", en: "three tempers",
+      echoes: [
+        { state: "playful", shape: "blob", color: "black" },
+        { state: "proud", shape: "blob", color: "black" },
+      ],
+    }),
+    LOOK("duet", {
+      state: "idle", shape: "blob", color: "black", tone: "paper", ms: 3200,
+      kicker: "群像", zh: "一大一小", en: "one and another",
+      echoes: [{ state: "curious", shape: "blob", color: "black" }],
+    }),
+    LOOK("chorus", {
+      state: "sleeping", shape: "blob", color: "black", tone: "night", ms: 3800,
+      kicker: "群像", zh: "都困了", en: "all sleepy",
+      echoes: [
+        { state: "drowsy", shape: "blob", color: "black" },
+        { state: "shy", shape: "blob", color: "black" },
+      ],
+    }),
+  ] },
+  { name: "入夜", looks: [
+    LOOK("right", { state: "powering-down", shape: "blob", color: "black", tone: "night", ms: 3400, kicker: "入夜", zh: "墨干了", en: "the ink dries" }),
+    LOOK("void",  { state: "sleeping", shape: "blob", color: "black", tone: "night", ms: 4200, kicker: "入夜", zh: "睡", en: "sleep" }),
+  ] },
+];
+
+const CATALOG = [
+  { name: "序幕", looks: [
+    { type: "title", compose: "hero", state: "spawning", ms: 2800, cap: "spawning" },
+    { type: "state", compose: "hero", state: "waking", ms: 3300, cap: "waking" },
+    { type: "state", compose: "hero", state: "idle", ms: 2400, cap: "idle" },
+  ] },
+  { name: "情绪", looks: [
+    "excited", "surprised", "suspicious", "angry", "drowsy", "happy",
+    "curious", "confused", "bored", "proud", "shy", "sad",
+    "laughing", "scared", "playful", "celebrate",
+  ].map((s) => ({ type: "state", compose: "hero", state: s, ms: s === "celebrate" ? 5700 : 2500, cap: s })) },
+  { name: "场景", looks: [
+    "idle", "listening", "thinking", "searching", "working",
+    "orbit", "radar", "progress", "humming", "loading",
+    "dictating", "writing", "sending", "receiving",
+    "uploading", "notifying", "alerting",
+  ].map((s) => ({ type: "state", compose: "hero", state: s, ms: 2600, cap: s })) },
+  { name: "形态", looks: [
+    "blob", "pebble", "bean", "egg", "squircle", "tablet", "capsule",
+    "cylinder", "hex", "gem", "crystal", "wedge", "shield", "dome",
+    "arch", "cloud", "teardrop", "leaf",
+  ].map((s) => ({ type: "shape", compose: "hero", shape: s, state: "playful", ms: 1900, cap: s })) },
+  { name: "色彩", looks: [
+    "black", "brown", "red", "orange", "yellow", "green", "cyan",
+    "blue", "violet", "magenta", "gray",
+  ].map((c) => ({ type: "color", compose: "hero", color: c, state: "happy", ms: 1600, cap: c })) },
+  { name: "尾声", looks: [
+    { type: "action", compose: "hero", act: "spin", state: "playful", ms: 2300, cap: "spin" },
+    { type: "action", compose: "hero", act: "bounce", state: "happy", ms: 2300, cap: "bounce" },
+    { type: "action", compose: "hero", act: "burst", state: "celebrate", ms: 2300, cap: "burst" },
+    { type: "state", compose: "hero", state: "powering-down", ms: 3400, cap: "powering-down" },
+    { type: "state", compose: "hero", state: "sleeping", ms: 3800, cap: "sleeping" },
+  ] },
+];
+
+const COMPOSES = [
+  { id: "hero", label: "中心" },
+  { id: "left", label: "左镜" },
+  { id: "right", label: "右镜" },
+  { id: "close", label: "近景" },
+  { id: "postage", label: "邮票" },
+  { id: "folio", label: "杂志" },
+  { id: "void", label: "留白" },
+  { id: "dock", label: "落幅" },
+  { id: "chorus", label: "群像" },
+  { id: "duet", label: "双人" },
+];
+
+const TONES = [
+  { id: "paper", label: "纸白", bg: "#ece7dc" },
+  { id: "cream", label: "奶油", bg: "#f6f0e3" },
+  { id: "warm", label: "暖沙", bg: "#eee2cc" },
+  { id: "stone", label: "石灰", bg: "#e2ddd1" },
+  { id: "night", label: "夜墨", bg: "#211e1a" },
+];
+const ASPECTS = [
+  { cls: "r169", label: "16:9" },
+  { cls: "r11", label: "1:1" },
+  { cls: "r916", label: "9:16" },
+];
+
+/* ---------- programs ---------- */
+/* 短片（图鉴式）：豆荚 → 团 → 待机 → 睡眠 → 图鉴序幕标题卡。每镜锁定形/色，中心构图，不动底色。 */
+const FILM = [
+  { name: "短片", looks: [
+    { type: "shape", compose: "hero", shape: "bean", color: "black", state: "curious", ms: 3200, cap: "bean" },
+    { type: "shape", compose: "hero", shape: "blob", color: "black", state: "idle", ms: 3200, cap: "blob" },
+    { type: "state", compose: "hero", shape: "blob", color: "black", state: "idle", ms: 4200, cap: "idle" },
+    { type: "state", compose: "hero", shape: "blob", color: "black", state: "sleeping", ms: 4400, cap: "sleeping" },
+    { type: "title", compose: "hero", shape: "blob", color: "black", state: "sleeping", ms: 4400, cap: "sleeping" },
+  ] },
+];
+
+const FOLLOW_COMPOSE = new Set(["hero", "left", "right", "dock", "chorus", "duet", "title"]);
+
+const handle = GROK.create("#botHost", {
+  shape: "blob", color: "black", scheme: "light", loginWrap: true,
+});
+const handleB = GROK.create("#botHostB", {
+  shape: "blob", color: "black", scheme: "light", loginWrap: true,
+});
+const handleC = GROK.create("#botHostC", {
+  shape: "blob", color: "black", scheme: "light", loginWrap: true,
+});
+const bot = handle.bot;
+bot.setMode("hold");
+handleB.bot.setMode("hold");
+handleC.bot.setMode("hold");
+handle.setFollowPointer(true);
+
+const stageEl = document.getElementById("stage");
+const captionEl = document.getElementById("caption");
+const capNo = document.getElementById("capNo");
+const capKicker = document.getElementById("capKicker");
+const capZh = document.getElementById("capZh");
+const capEn = document.getElementById("capEn");
+const progressEl = document.getElementById("progress");
+const chapterNameEl = document.getElementById("chapterName");
+const titleCard = document.getElementById("titleCard");
+const toastEl = document.getElementById("toast");
+const btnPlay = document.getElementById("btnPlay");
+const echoB = document.getElementById("botHostB");
+const echoC = document.getElementById("botHostC");
+
+let programId = "taste";
+let SHOTS = [];
+
+function movements() {
+  return programId === "taste" ? TASTE : programId === "film" ? FILM : CATALOG;
+}
+function flatten() {
+  const out = [];
+  movements().forEach((ch, ci) => ch.looks.forEach((sh, si) => out.push({ ...sh, ch: ci, si })));
+  return out;
+}
+
+let aspectIdx = 0;
+let toneIdx = 0;
+let subsOn = true;
+let paused = false;
+let speed = 1;
+let shotI = -1;
+let shotTimer = 0;
+let shotNominal = 0;
+let shotAt = 0;
+let composeOverride = null;
+
+let toastTimer = 0;
+function toast(text) {
+  toastEl.textContent = text;
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1400);
+}
+
+let forceHidden = false;
+let idleTimer = 0;
+function pokeUI() {
+  if (!forceHidden) document.body.classList.remove("hide-ui");
+  clearTimeout(idleTimer);
+  if (consoleOpen) return;
+  idleTimer = setTimeout(() => document.body.classList.add("hide-ui"), forceHidden ? 0 : 3000);
+}
+["pointermove", "pointerdown", "keydown"].forEach((ev) =>
+  window.addEventListener(ev, pokeUI, { passive: true })
+);
+
+let capOverride = null;
+function setCaption(look, chName, indexInChapter, totalInChapter) {
+  const fromLook = look && (look.zh || look.en)
+    ? { zh: look.zh, en: look.en || "", kicker: look.kicker, folio: look.folio }
+    : null;
+  const cap = capOverride || fromLook || (look && look.cap ? CAPS[look.cap] : null);
+  if (!subsOn || !cap || !(cap.zh || cap.en)) { captionEl.classList.remove("show"); return; }
+  capKicker.textContent = capOverride
+    ? "Manual · 手动"
+    : (cap.kicker || (totalInChapter
+      ? `${chName} · ${String(indexInChapter).padStart(2, "0")} / ${String(totalInChapter).padStart(2, "0")}`
+      : "Manual · 手动"));
+  capZh.textContent = cap.zh || "";
+  capEn.textContent = cap.en || "";
+  capNo.textContent = cap.folio || look?.folio || "";
+  captionEl.classList.remove("show");
+  void captionEl.offsetWidth;
+  captionEl.classList.add("show");
+}
+
+function rebuildProgress() {
+  progressEl.innerHTML = "";
+  movements().forEach(() => progressEl.appendChild(document.createElement("i")));
+}
+function paintProgress(ci) {
+  progressEl.classList.toggle("show", subsOn && !manual);
+  [...progressEl.children].forEach((el, i) => el.classList.toggle("on", i === ci));
+}
+
+function applyCompose(name) {
+  stageEl.dataset.compose = name || "hero";
+  document.querySelectorAll("#cComposes .cbtn").forEach((b) =>
+    b.classList.toggle("cur", b.dataset.compose === stageEl.dataset.compose)
+  );
+}
+
+function inkBot(h, state) {
+  if (state) h.setState(state, { resetEyes: false });
+  h.setShape("blob");
+  h.setColor("black", "light");
+}
+
+function setEchoes(echoes) {
+  const specs = echoes || [];
+  [[handleB, echoB], [handleC, echoC]].forEach(([h, el], i) => {
+    const spec = specs[i];
+    el.classList.toggle("on", !!spec);
+    if (!spec) return;
+    inkBot(h, spec.state);
+    h.setFollowPointer(true);
+    h.setPaused(paused);
+  });
+}
+
+function applyCatalogShot(sh) {
+  if (sh.state) handle.setState(sh.state, { resetEyes: false });
+  if (sh.shape) handle.setShape(sh.shape);
+  if (sh.color) handle.setColor(sh.color, "light");
+  if (sh.type === "action") playAct(sh.act);
+}
+
+function applyTasteShot(sh) {
+  inkBot(handle, sh.state);
+  if (sh.act) playAct(sh.act);
+}
+
+function playAct(act) {
+  if (act === "spin") handle.spin(1);
+  else if (act === "bounce") handle.bounce();
+  else if (act === "burst") handle.burst();
+}
+
+let manual = false;
+function applyShot(i) {
+  shotI = ((i % SHOTS.length) + SHOTS.length) % SHOTS.length;
+  const sh = SHOTS[shotI];
+  const ch = movements()[sh.ch];
+
+  if (sh.type === "title") titleCard.classList.remove("out");
+  else titleCard.classList.add("out");
+
+  const compose = composeOverride || sh.compose || "hero";
+  applyCompose(compose);
+  setEchoes(sh.echoes);
+  if (sh.tone) setToneById(sh.tone, { silent: true });
+
+  if (programId === "taste" || sh.type === "look") applyTasteShot(sh);
+  else applyCatalogShot(sh);
+
+  const follow = sh.follow ?? FOLLOW_COMPOSE.has(compose);
+  handle.setFollowPointer(!!follow);
+
+  chapterNameEl.textContent = ch.name;
+  setCaption(sh, ch.name, sh.si + 1, ch.looks.length);
+  paintProgress(sh.ch);
+  syncConsoleSelection(sh.cap || sh.state);
+  if (!manual) {
+    if (paused) shotNominal = sh.ms;
+    else schedule(sh.ms);
+  }
+}
+
+function schedule(nominalMs) {
+  shotNominal = nominalMs;
+  shotAt = performance.now();
+  armTimer();
+}
+function armTimer() {
+  clearTimeout(shotTimer);
+  shotTimer = setTimeout(() => applyShot(shotI + 1), Math.max(shotNominal / speed, 50));
+}
+function absorbElapsed() {
+  shotNominal = Math.max(shotNominal - (performance.now() - shotAt) * speed, 0);
+  shotAt = performance.now();
+}
+
+function next() { composeOverride = null; applyShot(shotI + 1); }
+function prev() { composeOverride = null; applyShot(shotI - 1); }
+
+function setPaused(v, { silent = false } = {}) {
+  paused = v;
+  handle.setPaused(v);
+  handleB.setPaused(v);
+  handleC.setPaused(v);
+  btnPlay.textContent = v ? "▶" : "⏸";
+  document.getElementById("cPlay").textContent = v ? "▶ 继续" : "⏸ 暂停";
+  if (v) {
+    absorbElapsed();
+    clearTimeout(shotTimer);
+  } else if (!manual) {
+    armTimer();
+  }
+  if (!silent) toast(v ? "已暂停" : "继续");
+}
+
+function setAspect(idx, { silent = false } = {}) {
+  aspectIdx = ((idx % ASPECTS.length) + ASPECTS.length) % ASPECTS.length;
+  ASPECTS.forEach((a, i) => stageEl.classList.toggle(a.cls, i === aspectIdx));
+  document.getElementById("btnAr169").setAttribute("aria-pressed", aspectIdx === 0);
+  document.getElementById("btnAr11").setAttribute("aria-pressed", aspectIdx === 1);
+  document.getElementById("btnAr916").setAttribute("aria-pressed", aspectIdx === 2);
+  document.querySelectorAll("#console [data-ar]").forEach((b) =>
+    b.setAttribute("aria-pressed", Number(b.dataset.ar) === aspectIdx)
+  );
+  if (!silent) toast(`画幅 ${ASPECTS[aspectIdx].label}`);
+}
+function setTone(idx, { silent = false } = {}) {
+  toneIdx = ((idx % TONES.length) + TONES.length) % TONES.length;
+  const t = TONES[toneIdx];
+  document.body.dataset.tone = t.id;
+  stageEl.style.setProperty("--stage-bg", t.bg);
+  if (!silent) toast(`底色 · ${t.label}`);
+}
+function setToneById(id, opts) {
+  const idx = TONES.findIndex((t) => t.id === id);
+  if (idx >= 0) setTone(idx, opts);
+}
+function setSubs(v) {
+  subsOn = v;
+  document.getElementById("btnSubs").setAttribute("aria-pressed", v);
+  document.getElementById("cSubs").setAttribute("aria-pressed", v);
+  progressEl.classList.toggle("show", v && !manual);
+  if (v) restoreDefaultCaption();
+  else captionEl.classList.remove("show");
+  toast(v ? "字幕开" : "字幕关");
+}
+function toggleHide() {
+  forceHidden = !forceHidden;
+  if (forceHidden) document.body.classList.add("hide-ui");
+  else pokeUI();
+  toast(forceHidden ? "界面已隐藏 · H 恢复" : "界面已恢复");
+}
+
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen?.();
+}
+
+function setProgram(id, { silent = false } = {}) {
+  programId = id === "catalog" ? "catalog" : id === "taste" ? "taste" : "film";
+  composeOverride = null;
+  SHOTS = flatten();
+  rebuildProgress();
+  rebuildChapters();
+  const label = { taste: "品味", film: "短片", catalog: "图鉴" }[programId];
+  document.getElementById("btnProgram").textContent = label;
+  document.getElementById("btnProgram").setAttribute("aria-pressed", programId === "taste");
+  document.getElementById("cTaste").setAttribute("aria-pressed", programId === "taste");
+  document.getElementById("cFilm").setAttribute("aria-pressed", programId === "film");
+  document.getElementById("cCatalog").setAttribute("aria-pressed", programId === "catalog");
+  dropManual();
+  applyShot(0);
+  if (!silent) toast(`节目 · ${label}`);
+}
+
+document.getElementById("btnPlay").onclick = () => setPaused(!paused);
+document.getElementById("btnPrev").onclick = prev;
+document.getElementById("btnNext").onclick = next;
+document.getElementById("btnProgram").onclick = () => setProgram(programId === "taste" ? "catalog" : "taste");
+document.getElementById("btnAr169").onclick = () => setAspect(0);
+document.getElementById("btnAr11").onclick = () => setAspect(1);
+document.getElementById("btnAr916").onclick = () => setAspect(2);
+document.getElementById("btnTone").onclick = () => setTone(toneIdx + 1);
+document.getElementById("btnSubs").onclick = () => setSubs(!subsOn);
+document.getElementById("btnHide").onclick = toggleHide;
+
+const consoleEl = document.getElementById("console");
+const consoleTab = document.getElementById("consoleTab");
+let consoleOpen = false;
+function setConsoleOpen(v) {
+  consoleOpen = v;
+  consoleEl.classList.toggle("open", v);
+  consoleTab.style.display = v ? "none" : "";
+  document.getElementById("hint").style.visibility = v ? "hidden" : "";
+  if (!v) {
+    document.activeElement?.blur?.();
+    pokeUI();
+  }
+}
+consoleTab.onclick = () => setConsoleOpen(true);
+document.getElementById("consoleClose").onclick = () => setConsoleOpen(false);
+
+function setManual(v, { silent = false } = {}) {
+  manual = v;
+  document.getElementById("cAuto").setAttribute("aria-pressed", !v);
+  document.getElementById("cManual").setAttribute("aria-pressed", v);
+  if (v) {
+    clearTimeout(shotTimer);
+    capOverride = null;
+    if (!silent) toast("手动接管 · 点击状态/身形/颜色即刻上屏");
+  } else {
+    capOverride = null;
+    applyShot(shotI < 0 ? 0 : shotI);
+    if (!silent) toast("回到自动播放");
+  }
+  syncConsoleSelection();
+}
+function dropManual() {
+  if (!manual) return;
+  manual = false;
+  document.getElementById("cAuto").setAttribute("aria-pressed", "true");
+  document.getElementById("cManual").setAttribute("aria-pressed", "false");
+}
+
+const cChapters = document.getElementById("cChapters");
+function rebuildChapters() {
+  cChapters.innerHTML = "";
+  movements().forEach((ch, ci) => {
+    const b = document.createElement("button");
+    b.className = "cbtn";
+    b.textContent = ch.name;
+    b.dataset.ch = ci;
+    b.onclick = () => {
+      dropManual();
+      composeOverride = null;
+      const first = SHOTS.findIndex((s) => s.ch === ci);
+      applyShot(first);
+      toast(`章节 · ${ch.name}`);
+    };
+    cChapters.appendChild(b);
+  });
+}
+
+const cComposes = document.getElementById("cComposes");
+COMPOSES.forEach((c) => {
+  const b = document.createElement("button");
+  b.className = "cbtn";
+  b.textContent = c.label;
+  b.dataset.compose = c.id;
+  b.onclick = () => {
+    composeOverride = c.id;
+    applyCompose(c.id);
+    if (c.id === "chorus" || c.id === "duet") {
+      const live = SHOTS[shotI]?.echoes;
+      setEchoes(live || [
+        { state: "playful" },
+        c.id === "chorus" ? { state: "proud" } : null,
+      ].filter(Boolean));
+    } else {
+      setEchoes([]);
+    }
+    toast(`构图 · ${c.label}`);
+  };
+  cComposes.appendChild(b);
+});
+
+const cStates = document.getElementById("cStates");
+const zhStateName = (name) => (CAPS[name] ? CAPS[name].zh : name);
+GROK_META.groups.forEach((group) => {
+  const label = document.createElement("span");
+  label.className = "glabel";
+  label.textContent = group.label;
+  cStates.appendChild(label);
+  const grid = document.createElement("div");
+  grid.className = "cgrid";
+  group.states.forEach((name) => {
+    const b = document.createElement("button");
+    b.className = "cbtn";
+    b.textContent = `${zhStateName(name)} ${name}`;
+    b.dataset.state = name;
+    b.title = name;
+    b.onclick = () => {
+      setManual(true, { silent: true });
+      applyManualShot({ state: name, cap: name });
+    };
+    grid.appendChild(b);
+  });
+  cStates.appendChild(grid);
+});
+
+const cShapes = document.getElementById("cShapes");
+Object.entries(GROK_GEO.shapes).forEach(([id, shape]) => {
+  const b = document.createElement("button");
+  b.className = "cbtn";
+  b.textContent = shape.label;
+  b.dataset.shape = id;
+  b.onclick = () => {
+    setManual(true, { silent: true });
+    applyManualShot({ shape: id, cap: id });
+  };
+  cShapes.appendChild(b);
+});
+
+const cColors = document.getElementById("cColors");
+Object.entries(GROK_GEO.palette).forEach(([id, pal]) => {
+  const b = document.createElement("button");
+  b.className = "cbtn";
+  b.textContent = `${(CAPS[id] || {}).zh || id} ${id}`;
+  b.dataset.color = id;
+  b.onclick = () => {
+    setManual(true, { silent: true });
+    applyManualShot({ color: id, cap: id });
+  };
+  cColors.appendChild(b);
+});
+
+function applyManualShot({ state, shape, color, cap }) {
+  capOverride = null;
+  titleCard.classList.add("out");
+  if (!composeOverride) applyCompose("hero");
+  setEchoes([]);
+  if (state) handle.setState(state, { resetEyes: false });
+  if (shape) handle.setShape(shape);
+  if (color) handle.setColor(color, "light");
+  chapterNameEl.textContent = "手动";
+  setCaption({ cap }, "手动", 0, 0);
+  progressEl.classList.remove("show");
+  syncConsoleSelection(cap, shape, color, state);
+  clearTimeout(shotTimer);
+}
+
+let lastManualKey = null;
+function syncConsoleSelection(capKey, shapeKey, colorKey, stateKey) {
+  const sh = SHOTS[shotI] || {};
+  const state = manual ? (stateKey || bot.state) : (stateKey || sh.state);
+  const locked = !manual && programId === "taste";
+  const shape = locked ? "blob" : (manual ? (shapeKey || bot.shapeName) : (shapeKey || sh.shape || "blob"));
+  const color = locked ? "black" : (manual
+    ? (colorKey || currentColor())
+    : (colorKey || sh.color || currentColor()));
+  const chapter = manual ? null : (SHOTS[shotI] || {}).ch;
+  cChapters.querySelectorAll("button").forEach((b) =>
+    b.classList.toggle("cur", Number(b.dataset.ch) === chapter)
+  );
+  cStates.querySelectorAll("button").forEach((b) =>
+    b.classList.toggle("cur", b.dataset.state === state)
+  );
+  cShapes.querySelectorAll("button").forEach((b) =>
+    b.classList.toggle("cur", b.dataset.shape === shape)
+  );
+  cColors.querySelectorAll("button").forEach((b) =>
+    b.classList.toggle("cur", b.dataset.color === color)
+  );
+  lastManualKey = capKey || null;
+}
+function currentColor() {
+  return bot.colorId || "black";
+}
+
+document.getElementById("cPlay").onclick = () => setPaused(!paused);
+document.getElementById("cPrevShot").onclick = prev;
+document.getElementById("cNextShot").onclick = next;
+document.getElementById("cAuto").onclick = () => setManual(false);
+document.getElementById("cManual").onclick = () => setManual(true);
+document.getElementById("cSpin").onclick = () => handle.spin(1);
+document.getElementById("cBounce").onclick = () => handle.bounce();
+document.getElementById("cBurst").onclick = () => handle.burst();
+document.getElementById("cTaste").onclick = () => setProgram("taste");
+document.getElementById("cFilm").onclick = () => setProgram("film");
+document.getElementById("cCatalog").onclick = () => setProgram("catalog");
+
+const cSpeed = document.getElementById("cSpeed");
+const cSpeedVal = document.getElementById("cSpeedVal");
+cSpeed.oninput = () => {
+  speed = Number(cSpeed.value);
+  cSpeedVal.textContent = speed.toFixed(speed % 1 ? 2 : 1) + "×";
+  if (!paused && !manual) { absorbElapsed(); armTimer(); }
+};
+cSpeed.onchange = () => toast(`速度 ${speed}×`);
+
+document.querySelectorAll("#console [data-ar]").forEach((b) => {
+  b.onclick = () => setAspect(Number(b.dataset.ar));
+});
+document.getElementById("cTone").onclick = () => setTone(toneIdx + 1);
+document.getElementById("cSubs").onclick = () => setSubs(!subsOn);
+document.getElementById("cHide").onclick = toggleHide;
+
+const cCapZh = document.getElementById("cCapZh");
+const cCapEn = document.getElementById("cCapEn");
+function restoreDefaultCaption() {
+  capOverride = null;
+  if (manual) {
+    setCaption({ cap: lastManualKey }, "手动", 0, 0);
+  } else {
+    const sh = SHOTS[shotI];
+    if (sh) setCaption(sh, movements()[sh.ch].name, sh.si + 1, movements()[sh.ch].looks.length);
+  }
+}
+function applyCapOverride() {
+  const zh = cCapZh.value.trim();
+  const en = cCapEn.value.trim();
+  if (!zh && !en) {
+    restoreDefaultCaption();
+    toast("恢复默认字幕");
+  } else {
+    capOverride = { zh: zh || en, en };
+    setCaption({ zh: capOverride.zh, en }, "手动", 0, 0);
+    toast("字幕已应用");
+  }
+}
+cCapZh.onkeydown = (e) => { if (e.key === "Enter") { applyCapOverride(); cCapZh.blur(); } };
+cCapEn.onkeydown = (e) => { if (e.key === "Enter") { applyCapOverride(); cCapEn.blur(); } };
+
+stageEl.addEventListener("click", (e) => {
+  if (e.target.closest(".chrome")) return;
+  next();
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.repeat) return;
+  const typing = e.target.tagName === "INPUT";
+  if (typing && e.key !== "Escape") return;
+  switch (e.key) {
+    case " ": e.preventDefault(); setPaused(!paused); break;
+    case "ArrowRight": e.preventDefault(); next(); break;
+    case "ArrowLeft": e.preventDefault(); prev(); break;
+    case "p": case "P": {
+      const order = ["taste", "film", "catalog"];
+      setProgram(order[(order.indexOf(programId) + 1) % order.length]);
+      break;
+    }
+    case "a": case "A": setAspect(aspectIdx + 1); break;
+    case "t": case "T": setTone(toneIdx + 1); break;
+    case "m": case "M": setSubs(!subsOn); break;
+    case "h": case "H": toggleHide(); break;
+    case "f": case "F": toggleFullscreen(); break;
+    case "c": case "C": setConsoleOpen(!consoleOpen); break;
+    case "Escape": if (consoleOpen) setConsoleOpen(false); break;
+  }
+});
+
+const boot = new URLSearchParams(location.search);
+setTone(0, { silent: true });
+const ar = boot.get("ar");
+setAspect(ar === "1:1" ? 1 : ar === "9:16" ? 2 : 0, { silent: true });
+const bootProgram = boot.get("program");
+setProgram(
+  bootProgram === "catalog" ? "catalog" : bootProgram === "taste" ? "taste" : "film",
+  { silent: true },
+);
+const startShot = Number(boot.get("shot") || 0);
+if (startShot > 0) {
+  titleCard.style.transition = "none";
+  applyShot(startShot);
+  void titleCard.offsetWidth;
+  titleCard.style.transition = "";
+}
+if (boot.get("pause") === "1") setPaused(true, { silent: true });
+pokeUI();
+</script>
+</body>
+</html>

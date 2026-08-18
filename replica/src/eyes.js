@@ -69,7 +69,7 @@
     const midY = (cents[0][1] + cents[1][1]) / 2;
     const pullX = (Re - midX) * 0.42 * Vn;
     const pullY = (Re - midY) * 0.42 * Vn;
-    const gazeW = pointer ? 0.2 : 1;
+    const gazeW = opt.tracking ? 0.2 : 1;
     const badgeRing = opt.badgeRing || ringHint;
     const Yl = badgeRing
       ? badgeRing[Math.round(badgeRing.length * 7 / 8) % badgeRing.length]
@@ -138,6 +138,9 @@
       let Kj = Math.sin(now * 42e-5 + i) * 1.4 + Math.sin(now * 0.001 + i * 2) * 0.5;
       let Ko = Math.sin(now * 58e-5 + i) * 0.9;
       if (pointer) {
+        const Zl = Rn(0.16);
+        pointer.x += (pointer.tx - pointer.x) * Zl;
+        pointer.y += (pointer.ty - pointer.y) * Zl;
         Kj += pointer.x * (1 - 0.6 * Vn) + pullX;
         Ko += pointer.y * (1 - 0.6 * Vn) + pullY;
       } else {

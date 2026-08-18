@@ -1,0 +1,158 @@
+import type fr from './fr'
+
+const en: typeof fr = {
+  app: {
+    name: 'study',
+    title: 'study — spring character',
+    botAria: 'Spring-driven character',
+    missingGeo: 'Local geometry is missing. The chrome still works; the character stays off. See replica/geometry.schema.md.'
+  },
+  rail: {
+    nav: 'Sections',
+    customize: 'Customise',
+    animations: 'Animations',
+    settings: 'Settings'
+  },
+  panel: {
+    animations: 'Animation',
+    shape: 'Shape',
+    expression: 'Expression',
+    color: 'Colour',
+    group_lifecycle: 'Lifecycle',
+    group_reactions: 'Reactions',
+    group_agent: 'Agent',
+    group_product: 'Product'
+  },
+  shapes: {
+    blob: 'Blob',
+    bean: 'Bean',
+    egg: 'Egg',
+    teardrop: 'Drop',
+    cloud: 'Cloud',
+    leaf: 'Leaf',
+    squircle: 'Cube',
+    capsule: 'Capsule'
+  },
+  export: {
+    action: 'Export PNG',
+    more: 'Other formats',
+    png: 'Download PNG',
+    svg: 'Download SVG',
+    anime: 'Download animated SVG',
+    gif: 'Download animated GIF',
+    cycleDetail: 'The video is lighter and smoother; the GIF plays anywhere.',
+    cycleFormat: 'Format',
+    cycle_mp4: 'MP4 video',
+    cycle_mp4_aide: 'Light and smooth, needs a background',
+    cycle_gif: 'Animated GIF',
+    cycle_gif_aide: 'Plays anywhere, heavier',
+    cycleProgress: 'Exporting…',
+    cycleReessayer: 'Try again',
+    gifTitle: 'Download animated GIF',
+    gifDetail:
+      'GIF transparency is all-or-nothing: with no background, the ball’s edge comes out a little hard.',
+    gifBackground: 'Background',
+    fond_blanc: 'White background',
+    fond_blanc_aide: 'Smooth edge, for light surfaces',
+    fond_transparent: 'Transparent background',
+    fond_transparent_aide: 'Fits any background, edge a little hard',
+    gifConfirm: 'Download',
+    copie: 'Copy image',
+    copieSvg: 'Copy SVG',
+    done: 'Exported',
+    copied: 'Copied',
+    failed: 'Export failed'
+  },
+  preview: {
+    exit: 'Exit preview',
+    open: 'Preview',
+    key: 'Esc'
+  },
+  timeline: {
+    play: 'Start playback',
+    pause: 'Stop playback',
+    addAnimation: 'Add an animation',
+    preview: 'Preview',
+    export: 'Export animation sequence',
+    zoom: 'Track zoom',
+    blockAria: '{state}, {duration}',
+    blockDurationAria: 'Duration of {state}, {duration}',
+    blockRemoveAria: 'Remove {state}'
+  },
+  dialog: {
+    cancel: 'Cancel',
+    nameCreateTitle: 'New cycle',
+    nameRenameTitle: 'Rename cycle',
+    nameField: 'Cycle name',
+    nameCreate: 'Create',
+    nameRename: 'Rename',
+    removeTitle: 'Delete “{name}”?',
+    removeDetail:
+      'This sequence will be lost, along with its animation. | This sequence will be lost, along with its {n} animations.',
+    removeConfirm: 'Delete'
+  },
+  cycles: {
+    defaultName: 'Default cycle',
+    newName: 'My cycle',
+    menuNew: 'New cycle',
+    menuRenameAria: 'Rename {name}',
+    menuRemoveAria: 'Delete {name}'
+  },
+  states: {
+    sleeping: 'Sleeping',
+    waking: 'Waking',
+    idle: 'Idle',
+    listening: 'Listening',
+    thinking: 'Thinking',
+    searching: 'Searching',
+    working: 'Working',
+    excited: 'Excited',
+    surprised: 'Surprised',
+    suspicious: 'Suspicious',
+    angry: 'Angry',
+    drowsy: 'Drowsy',
+    happy: 'Happy',
+    curious: 'Curious',
+    confused: 'Confused',
+    bored: 'Bored',
+    proud: 'Proud',
+    shy: 'Shy',
+    sad: 'Sad',
+    laughing: 'Laughing',
+    scared: 'Scared',
+    playful: 'Playful',
+    celebrate: 'Celebrate',
+    orbit: 'Orbit',
+    radar: 'Radar',
+    progress: 'Progress',
+    spawning: 'Spawning',
+    humming: 'Humming',
+    loading: 'Loading',
+    dictating: 'Dictating',
+    writing: 'Writing',
+    sending: 'Sending',
+    receiving: 'Receiving',
+    uploading: 'Uploading',
+    notifying: 'Notifying',
+    alerting: 'Alerting',
+    dragging: 'Dragging',
+    bouncing: 'Bouncing',
+    'powering-down': 'Powering down'
+  },
+  settings: {
+    language: 'Language',
+    about: 'About',
+    lab: 'Engine lab',
+    labAria: 'Open the original playground',
+    showcase: 'Showcase',
+    showcaseAria: 'Open the recording showcase',
+    credits: 'Unofficial study. Motion from the replica engine; layout after bloub. Not affiliated with xAI.',
+    missing: 'No geometry-data.js — stock chrome, no character.'
+  },
+  units: {
+    seconds: '{n} s',
+    secondsShort: '{n}s'
+  }
+}
+
+export default en

@@ -1,0 +1,156 @@
+import type fr from './fr'
+
+const zh: typeof fr = {
+  app: {
+    name: 'study',
+    title: 'study — 弹簧角色',
+    botAria: '弹簧驱动的角色',
+    missingGeo: '本地几何不在。页面壳还在，角色不画。见 replica/geometry.schema.md。'
+  },
+  rail: {
+    nav: '分区',
+    customize: '自定义',
+    animations: '动画',
+    settings: '设置'
+  },
+  panel: {
+    animations: '动画',
+    shape: '形体',
+    expression: '表情',
+    color: '颜色',
+    group_lifecycle: '生命周期',
+    group_reactions: '反应',
+    group_agent: '代理',
+    group_product: '产品'
+  },
+  shapes: {
+    blob: '团子',
+    bean: '豆',
+    egg: '蛋',
+    teardrop: '水滴',
+    cloud: '云',
+    leaf: '叶子',
+    squircle: '正方体',
+    capsule: '胶囊'
+  },
+  export: {
+    action: '导出 PNG',
+    more: '其他格式',
+    png: '下载 PNG',
+    svg: '下载 SVG',
+    anime: '下载 SVG 动图',
+    gif: '下载 GIF 动图',
+    cycleDetail: '视频更轻更流畅；GIF 到处都能播放。',
+    cycleFormat: '格式',
+    cycle_mp4: 'MP4 视频',
+    cycle_mp4_aide: '轻巧流畅，必须有背景',
+    cycle_gif: 'GIF 动图',
+    cycle_gif_aide: '到处可播，体积更大',
+    cycleProgress: '正在导出…',
+    cycleReessayer: '重试',
+    gifTitle: '下载 GIF 动图',
+    gifDetail: 'GIF 的透明只有全有或全无：不加背景时，球体边缘会略显生硬。',
+    gifBackground: '背景',
+    fond_blanc: '白色背景',
+    fond_blanc_aide: '边缘平滑，适合浅色底',
+    fond_transparent: '透明背景',
+    fond_transparent_aide: '适配任何背景，边缘略硬',
+    gifConfirm: '下载',
+    copie: '复制图片',
+    copieSvg: '复制 SVG',
+    done: '已导出',
+    copied: '已复制',
+    failed: '导出失败'
+  },
+  preview: {
+    exit: '退出预览',
+    open: '预览',
+    key: 'Esc'
+  },
+  timeline: {
+    play: '开始播放',
+    pause: '停止播放',
+    addAnimation: '添加动画',
+    preview: '预览',
+    export: '导出动画序列',
+    zoom: '轨道缩放',
+    blockAria: '{state}，{duration}',
+    blockDurationAria: '{state} 的时长，{duration}',
+    blockRemoveAria: '移除 {state}'
+  },
+  dialog: {
+    cancel: '取消',
+    nameCreateTitle: '新建循环',
+    nameRenameTitle: '重命名循环',
+    nameField: '循环名称',
+    nameCreate: '创建',
+    nameRename: '重命名',
+    removeTitle: '删除「{name}」？',
+    removeDetail: '这段蒙太奇会连同动画一起丢掉。 | 这段蒙太奇会连同它的 {n} 段动画一起丢掉。',
+    removeConfirm: '删除'
+  },
+  cycles: {
+    defaultName: '默认循环',
+    newName: '我的循环',
+    menuNew: '新建循环',
+    menuRenameAria: '重命名 {name}',
+    menuRemoveAria: '删除 {name}'
+  },
+  states: {
+    sleeping: '睡着',
+    waking: '醒来',
+    idle: '休息',
+    listening: '倾听',
+    thinking: '思考',
+    searching: '搜索',
+    working: '工作',
+    excited: '兴奋',
+    surprised: '惊讶',
+    suspicious: '怀疑',
+    angry: '生气',
+    drowsy: '困倦',
+    happy: '高兴',
+    curious: '好奇',
+    confused: '困惑',
+    bored: '无聊',
+    proud: '得意',
+    shy: '害羞',
+    sad: '难过',
+    laughing: '大笑',
+    scared: '害怕',
+    playful: '调皮',
+    celebrate: '庆祝',
+    orbit: '环绕',
+    radar: '雷达',
+    progress: '进度',
+    spawning: '生成',
+    humming: '嗡鸣',
+    loading: '加载',
+    dictating: '口述',
+    writing: '书写',
+    sending: '发送',
+    receiving: '接收',
+    uploading: '上传',
+    notifying: '通知',
+    alerting: '警报',
+    dragging: '拖拽',
+    bouncing: '弹跳',
+    'powering-down': '关机'
+  },
+  settings: {
+    language: '语言',
+    about: '关于',
+    lab: '机芯实验室',
+    labAria: '打开原来的 playground',
+    showcase: '展示页',
+    showcaseAria: '打开录屏展示',
+    credits: '非官方学习稿。动效是 replica 机芯，版式参考 bloub。与 xAI 无关。',
+    missing: '没有 geometry-data.js — 只有壳，没有角色。'
+  },
+  units: {
+    seconds: '{n} 秒',
+    secondsShort: '{n}秒'
+  }
+}
+
+export default zh
