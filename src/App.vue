@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import AnimPanel from '@/components/AnimPanel.vue'
 import Customizer from '@/components/Customizer.vue'
+import PlaybackBar from '@/components/PlaybackBar.vue'
 import CycleDialog from '@/components/CycleDialog.vue'
 import ExportBar from '@/components/ExportBar.vue'
 import GifDialog from '@/components/GifDialog.vue'
-import Hero from '@/components/Hero.vue'
+import AvatarStage from '@/components/AvatarStage.vue'
 import Settings from '@/components/Settings.vue'
 import SideRail, { type ViewId } from '@/components/SideRail.vue'
 import Timeline from '@/components/Timeline.vue'
@@ -51,6 +52,7 @@ import {
   type FondGif,
   type FormatCycle
 } from '@/ui/export'
+import { parseManual, persistable, type ManualState } from '@/ui/pose/model'
 import { ecris, lis } from '@/ui/stockage'
 
 const view = ref<ViewId>('personnaliser')
@@ -65,7 +67,22 @@ const hero = ref<{
   spin: () => void
   orbitGaze: (ms?: number) => void
   svg: () => SVGSVGElement | null
+  seekEye: (index: number, opts?: { snap?: boolean }) => void
+  flushPerformance: () => void
+  setPlaylistHold: (on: boolean) => void
+  setPaused: (on: boolean | 'hold-pose') => void
+  holdFrame: (at?: number) => void
+  freezeNow: (opts?: { settle?: boolean }) => unknown
+  playback: () => {
+    state: string
+    eyeIdx: number
+    holdMs: number
+    remainMs: number
+    held: boolean
+    frozen: boolean
+  } | null
 } | null>(null)
+const manual = ref<ManualState>(parseManual(lis('manuel')))
 
 const restored = parseCycles(lis('cycles'))
 const cycles = ref<Cycle[]>(restored.length ? restored : [defaultCycle()])
@@ -91,13 +108,39 @@ const playedState = computed(() => {
   if (view.value === 'animations' || preview.value) return state.value
   return expression.value
 })
+const avatarSize = computed(() => {
+  if (preview.value) return 560
+  if (view.value === 'personnaliser') return 580
+  return 440
+})
+const avatarMax = computed(() => {
+  if (preview.value) return 'max-w-[min(560px,calc(100dvh_-_6rem))]'
+  if (view.value === 'personnaliser')
+    return 'max-w-[min(600px,calc(100dvh_-_var(--timeline)_-_7rem))]'
+  return 'max-w-[min(460px,calc(100dvh_-_var(--timeline)_-_7rem))]'
+})
 
-watch(shape, (id) => ecris('forme', id))
+watch(shape, (id) => {
+  ecris('forme', id)
+  if (manual.value.selected) manual.value = { ...manual.value, selected: null }
+})
 watch(color, (id) => ecris('couleur', id))
 watch(expression, (id) => {
   ecris('expression', id)
   if (view.value !== 'animations') state.value = id
+  if (view.value !== 'personnaliser') return
+  posePlay.value = true
+  poseStopped.value = false
+  poseIdx.value = 0
+  poseElapsed.value = 0
 })
+watch(
+  manual,
+  (value) => {
+    ecris('manuel', JSON.stringify(persistable(value)))
+  },
+  { deep: true }
+)
 
 let pending: ReturnType<typeof setTimeout>
 function enregistreCycles() {
@@ -145,10 +188,48 @@ function onSeek(t: number) {
   state.value = cycle.value.blocks[index]?.state ?? 'idle'
 }
 
+const posePlay = ref(true)
+const poseStopped = ref(false)
+const poseIdx = ref(0)
+const poseElapsed = ref(0)
+const poseHold = ref(2)
+
+function onSeekPose(index: number) {
+  const frozen = !!hero.value?.playback()?.frozen
+  hero.value?.seekEye(index, { snap: frozen })
+  poseIdx.value = index
+}
+
+function releasePoseFreeze() {
+  hero.value?.setPaused(false)
+  hero.value?.setPlaylistHold(false)
+}
+
+function applyPosePlayback() {
+  if (view.value !== 'personnaliser' || preview.value) return
+  if (posePlay.value) {
+    poseStopped.value = false
+    hero.value?.setPaused(false)
+    hero.value?.setPlaylistHold(false)
+    return
+  }
+  hero.value?.seekEye(poseIdx.value, { snap: true })
+  hero.value?.setPlaylistHold(true)
+  hero.value?.freezeNow({ settle: poseStopped.value })
+}
+
+function onStopPose() {
+  poseStopped.value = true
+  posePlay.value = false
+  hero.value?.setPlaylistHold(true)
+  hero.value?.freezeNow({ settle: true })
+}
+
 const gardeAnim = ref(false)
 
-watch(view, (now) => {
+watch(view, (now, prev) => {
   intro.value = false
+  if (prev === 'personnaliser' && now !== 'personnaliser') releasePoseFreeze()
   if (now === 'animations') {
     gardeAnim.value = true
     playing.value = true
@@ -157,10 +238,33 @@ watch(view, (now) => {
   }
   playing.value = now === 'reglages'
   state.value = expression.value
+  if (now === 'personnaliser') {
+    void nextTick(() => {
+      hero.value?.flushPerformance()
+      applyPosePlayback()
+    })
+  }
 })
 
 watch(preview, (on) => {
-  if (on) playing.value = true
+  if (on) {
+    playing.value = true
+    releasePoseFreeze()
+    return
+  }
+  if (view.value === 'personnaliser') void nextTick(applyPosePlayback)
+})
+
+watch(posePlay, (on) => {
+  if (view.value !== 'personnaliser') return
+  if (on) {
+    poseStopped.value = false
+    hero.value?.setPaused(false)
+    hero.value?.setPlaylistHold(false)
+    return
+  }
+  hero.value?.setPlaylistHold(true)
+  hero.value?.freezeNow({ settle: poseStopped.value })
 })
 
 let raf = 0
@@ -169,6 +273,14 @@ function tick(ms: number) {
   raf = requestAnimationFrame(tick)
   const dt = last ? Math.min((ms - last) / 1000, 0.064) : 0
   last = ms
+  if (view.value === 'personnaliser' && !preview.value) {
+    const snap = hero.value?.playback()
+    if (snap) {
+      poseIdx.value = snap.eyeIdx
+      poseHold.value = snap.holdMs / 1000
+      poseElapsed.value = Math.max(0, (snap.holdMs - snap.remainMs) / 1000)
+    }
+  }
   if (!playing.value || (view.value !== 'animations' && !preview.value)) return
   const blocs = cycle.value.blocks
   const cur = blocs[block.value]
@@ -185,6 +297,18 @@ function tick(ms: number) {
 
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') preview.value = false
+  if (e.code !== 'Space') return
+  if (view.value !== 'animations' && !preview.value) return
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return
+  const node = e.target
+  if (
+    node instanceof HTMLElement &&
+    node.closest('input, textarea, select, [contenteditable="true"], dialog')
+  ) {
+    return
+  }
+  e.preventDefault()
+  playing.value = !playing.value
 }
 
 function onPageHide() {
@@ -256,6 +380,7 @@ watch(dialogueCycle, (ouverte) => {
 })
 
 watch([view, preview], () => {
+  if (manual.value.selected) manual.value = { ...manual.value, selected: null }
   if (view.value !== 'animations' || preview.value) annuleCycle()
 })
 
@@ -316,6 +441,7 @@ async function exporte(id: ActionId, confirme = false) {
 
 function onHeroReady(ok: boolean) {
   ready.value = ok
+  if (ok) void nextTick(applyPosePlayback)
   if (!intro.value) return
   if (!ok) {
     intro.value = false
@@ -358,7 +484,7 @@ onUnmounted(() => {
   </button>
 
   <div
-    class="scene min-h-full items-stretch justify-center p-8 max-lg:flex max-lg:flex-col max-lg:gap-10 max-lg:px-5"
+    class="scene min-h-full items-stretch justify-center p-8 lg:pr-3 max-lg:flex max-lg:flex-col max-lg:gap-10 max-lg:px-5"
     :class="[
       !preview && 'scene--timeline lg:pb-[calc(var(--timeline)_+_1rem)]',
       !preview && view === 'animations' && 'pb-[calc(var(--timeline)_+_1rem)]',
@@ -385,22 +511,24 @@ onUnmounted(() => {
       <div
         class="avatar flex aspect-square w-full items-center justify-center"
         :class="[
-          preview
-            ? 'max-w-[min(560px,calc(100dvh_-_6rem))]'
-            : 'max-w-[min(460px,calc(100dvh_-_var(--timeline)_-_7rem))]',
+          avatarMax,
           nue && 'avatar--intro',
-          view === 'reglages' && !preview && 'avatar--geant'
+          view === 'reglages' && !preview && 'avatar--geant',
+          view === 'personnaliser' && !preview && !nue && 'avatar--bas'
         ]"
       >
-        <Hero
+        <AvatarStage
           ref="hero"
           class="h-auto max-w-full"
-          :size="preview ? 560 : 440"
+          :size="avatarSize"
           :shape="shape"
           :color="color"
           :state="playedState"
           :follow="follow"
+          :manual="manual"
+          :tools="view === 'personnaliser' && !preview"
           @ready="onHeroReady"
+          @update:manual="manual = $event"
         />
       </div>
 
@@ -434,14 +562,19 @@ onUnmounted(() => {
 
     <aside
       v-if="!preview"
-      class="panneau scene__droite w-full lg:w-80 lg:shrink-0"
-      :class="droite ? 'panneau--ouvert max-lg:order-2' : 'max-lg:hidden'"
+      class="panneau scene__droite w-full lg:w-[21.25rem] lg:shrink-0"
+      :class="[
+        droite ? 'panneau--ouvert max-lg:order-2' : 'max-lg:hidden',
+        view === 'personnaliser' && !intro && 'playback-host'
+      ]"
     >
       <Customizer
         v-show="view === 'personnaliser'"
+        class="playback-pad"
         v-model:shape="shape"
         v-model:color="color"
         v-model:expression="expression"
+        v-model:manual="manual"
         :ready="ready"
         :active="view === 'personnaliser'"
       />
@@ -455,10 +588,24 @@ onUnmounted(() => {
         :active="view === 'animations'"
         @pick="addBlock"
       />
+      <PlaybackBar
+        v-if="view === 'personnaliser' && !intro"
+        v-model:playing="posePlay"
+        :stopped="poseStopped"
+        :expression="expression"
+        :cursor="poseIdx"
+        :elapsed="poseElapsed"
+        :hold="poseHold"
+        :shape="shape"
+        :color="color"
+        :active="view === 'personnaliser'"
+        :ready="ready"
+        @seek="onSeekPose"
+        @stop="onStopPose"
+      />
     </aside>
   </div>
 
-  <Transition name="fondu">
   <Timeline
     v-if="view === 'animations' && !preview"
     v-model:cycles="cycles"
@@ -473,7 +620,6 @@ onUnmounted(() => {
     @preview="preview = true"
     @exporter="dialogueCycle = true"
   />
-  </Transition>
 
   <p v-if="view === 'reglages' && !preview" class="wordmark" aria-hidden="true">STUDY</p>
 </template>

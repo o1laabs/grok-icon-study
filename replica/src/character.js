@@ -30,6 +30,8 @@
     notifying: { x: 7, y: -3 }, playful: { x: 10, y: -4 }, happy: { x: -6, y: -4 },
     laughing: { x: 4, y: -4 }, listening: { x: 5, y: -2 }, scared: { x: 12, y: 2 },
   };
+  // Still-frame eyes. Shy playlist starts at idle 0; 24 is the look-down face.
+  const HOLD_EYE = { shy: 24 };
 
   class GrokCharacter {
     constructor(svg, opts = {}) {
@@ -46,13 +48,22 @@
       this.eyeTopology = opts.eyeTopology ?? this.loginWrap;
       this.faceTune = opts.faceTune ?? (this.loginWrap ? FACE_TUNE : null);
       this.pose = { ...(this.loginWrap ? POSE : { turn: 0, tilt: 0, roll: 0, scale: 1 }), ...opts.pose };
+      this.poseRest = { turn: this.pose.turn, tilt: this.pose.tilt, roll: this.pose.roll };
       this.poseHome = opts.poseHome || (this.loginWrap ? POSE_HOME : { turn: 0, tilt: 0, roll: 0 });
+      this.manualHold = false;
+      this.manualTx = 0;
+      this.manualTy = 0;
+      this.manualSpin = 0;
+      this.eyeTune = null;
       this.uniformEyes = opts.uniformEyes ?? (this.loginWrap ? UNIFORM_EYES : false);
       this.eyeScaleProp = opts.eyeScale ?? (this.loginWrap ? shapeEyeScale(this.shapeName) : 1);
       this.emphasis = !!opts.emphasis;
       this.followPointer = !!opts.followPointer;
       this.gazeTarget = opts.gazeTarget || null;
       this.frozen = opts.paused === "hold-pose";
+      this.holdAt = 900;
+      this.clockHold = 0;
+      this.frozenAt = 0;
       this.driven = !!opts.driven;
       this.paused = !!opts.paused;
       this.reduceMotion = opts.reduceMotion ?? (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -84,6 +95,10 @@
       this.eyeTo = 0;
       this.eyeStiffness = 7;
       this.eyeIdx = 0;
+      this.eyeHoldMs = 0;
+      this.eyeRemain = 0;
+      this.playlistHold = false;
+      this.eyePinned = false;
       this._fromPolys = null;
 
       this.t0 = performance.now();
@@ -134,6 +149,19 @@
       this.setColor(this.colorId, this.scheme);
       this._applyPoseScale();
       this.setState(this.state, { resetEyes: true });
+      this.eyePinned = Number.isFinite(opts.eyeIndex) && !!(this.geo.eyes && this.geo.eyes[opts.eyeIndex]);
+      if (this.eyePinned) {
+        const id = opts.eyeIndex;
+        this.eyeFrom = id;
+        this.eyeTo = id;
+        this.eyeMorph.x = 1;
+        this.eyeMorph.t = 1;
+        this.eyeMorph.v = 0;
+        this._fromPolys = null;
+        const list = this.playlists[this.state] || [];
+        const slot = list.indexOf(id);
+        this.eyeIdx = slot >= 0 ? slot : 0;
+      }
       if (!this.driven) this._bindPointer();
       if (this.frozen) {
         this.holdFrame();
@@ -188,6 +216,10 @@
         this.holdFrame();
         return;
       }
+      if (!v && this.frozen && this.frozenAt) {
+        this.clockHold += performance.now() - this.frozenAt;
+      }
+      this.frozenAt = 0;
       this.frozen = false;
       this.paused = !!v;
       if (!this.paused) this._armTick();
@@ -195,12 +227,16 @@
 
     _armTick() {
       if (this.frozen || this.driven || this._raf) return;
-      this.last = performance.now();
-      this._raf = requestAnimationFrame((t) => this._tick(t));
+      this.last = this._clock();
+      this._raf = requestAnimationFrame((t) => this._tick(t - this.clockHold));
     }
 
     _wake() {
-      if (this.frozen || this.driven) return;
+      if (this.driven) return;
+      if (this.frozen) {
+        this._paint(this.last || this.t0);
+        return;
+      }
       if (this.paused) this._armTick();
     }
 
@@ -218,6 +254,111 @@
         this.pointerRaw = null;
         this.gazeTarget = null;
       }
+    }
+
+    setPose(next) {
+      if (!next) return;
+      if (next.turn != null) this.pose.turn = next.turn;
+      if (next.tilt != null) this.pose.tilt = next.tilt;
+      if (next.roll != null) this.pose.roll = next.roll;
+      this._wake();
+    }
+
+    setManualOffset(next) {
+      if (!next) return;
+      if (next.tx != null) this.manualTx = next.tx;
+      if (next.ty != null) this.manualTy = next.ty;
+      if (next.spin != null) this.manualSpin = next.spin;
+      this._wake();
+    }
+
+    setEyeTune(tune) {
+      this.eyeTune = tune || null;
+      this._wake();
+    }
+
+    _clearFx() {
+      this.trick = null;
+      this.spinTurn = null;
+      this.gazeOrbit = null;
+      this.gazeSpin = 0;
+      this.hopAt = -1;
+      this.wildWide = false;
+      this.ovKind = null;
+      this.ovPrev = null;
+      this.ovTarget = null;
+      this.ovOn = false;
+      this.ovRest = false;
+      this.ovSpin = 0;
+      snapSpring(this.overlay, 0);
+      snapSpring(this.overlayMix, 1);
+      snapSpring(this.notify, 0);
+      snapSpring(this.humDots, 0);
+      this.particles?.clear();
+      this.fx?.resetInk();
+      this.fx?.resetRecv();
+      this.fx?.hideAll();
+      if (this.group) this.group.style.opacity = "1";
+    }
+
+    _snapBodyRest() {
+      snapSpring(this.spin, 0);
+      snapSpring(this.tx, 0);
+      snapSpring(this.ty, 0);
+      snapSpring(this.squash, 1);
+      snapSpring(this.eyeScale, 1);
+      this.extras = { ...this.extras, turn: null, Kr: 0, yi: 0, ki: 0, Yr: 0, Zr: 0, wi: 0, hop: 0 };
+    }
+
+    flushPerformance() {
+      this._clearFx();
+      this._snapBodyRest();
+      this._wake();
+    }
+
+    setManualHold(on) {
+      const next = !!on;
+      if (next === this.manualHold) {
+        this._wake();
+        return;
+      }
+      this.manualHold = next;
+      if (next) {
+        this.trickAt = Infinity;
+        this.gazeUntil = Infinity;
+        snapSpring(this.gazeX, 0);
+        snapSpring(this.gazeY, 0);
+        this.pointer.x = 0;
+        this.pointer.y = 0;
+        this.pointer.tx = 0;
+        this.pointer.ty = 0;
+        this.ctx.wantPn = null;
+        this.ctx.wantBurst = null;
+        this.ctx.tyKick = 0;
+        this.ctx.spinKick = 0;
+        this.ctx.forceSleepEye = false;
+        this.ctx.wakeEye = null;
+        this.setFollowPointer(false);
+        this._clearFx();
+        this._snapBodyRest();
+      } else {
+        this.manualTx = 0;
+        this.manualTy = 0;
+        this.manualSpin = 0;
+        this.eyeTune = null;
+        this.ctx = this._freshCtx(this._clock());
+        this.pose.turn = this.poseRest.turn;
+        this.pose.tilt = this.poseRest.tilt;
+        this.pose.roll = this.poseRest.roll;
+        this.gazeUntil = this._clock();
+        this.blinkUntil = this._clock() + rand(1500, 7000);
+        this.trickAt = this._clock() + rand(4000, 8000);
+      }
+      this._wake();
+    }
+
+    parts() {
+      return { svg: this.svg, body: this.body, eyes: this.eyeEls, group: this.group };
     }
 
     setGazeTarget(pt) {
@@ -277,7 +418,47 @@
     }
 
     _clock() {
-      return this.driven ? this.last : performance.now();
+      if (this.driven) return this.last;
+      return performance.now() - this.clockHold;
+    }
+
+    // settle snaps t = x (stop); pause keeps the current targets.
+    freezeNow({ settle = false } = {}) {
+      const already = this.frozen;
+      this.frozen = true;
+      this.paused = true;
+      if (!already) this.frozenAt = performance.now();
+      this.last = this._clock();
+      if (this._raf) {
+        cancelAnimationFrame(this._raf);
+        this._raf = 0;
+      }
+      for (const s of [
+        this.spin,
+        this.tx,
+        this.ty,
+        this.squash,
+        this.blink,
+        this.eyeScale,
+        this.gazeX,
+        this.gazeY,
+        this.eyeMorph,
+        this.overlay,
+        this.overlayMix,
+        this.notify,
+        this.humDots,
+        this.shapeSpring,
+        this.overlayTurn,
+      ]) {
+        if (settle) s.t = s.x;
+        s.v = 0;
+      }
+      this.ctx.wantPn = null;
+      this.ctx.wantBurst = null;
+      this.ctx.tyKick = 0;
+      this.ctx.spinKick = 0;
+      this._paint(this.last);
+      return this.snapshot();
     }
 
     setState(name, { resetEyes = false } = {}) {
@@ -302,7 +483,11 @@
       } else if (name !== "sleeping" && name !== "waking") {
         this._morphEyes(list[0], name === "excited" ? 10 : 8);
       }
-      this.eyeUntil = this.stateAt + rand(...EYE_HOLD_MS[name]);
+      const hold = rand(...EYE_HOLD_MS[name]);
+      this.eyeHoldMs = hold;
+      this.eyeRemain = hold;
+      this.eyeUntil = this.stateAt + hold;
+      this.playlistHold = false;
       const blink = BLINK_MS[name];
       this.blinkUntil = blink ? this.stateAt + rand(1500, 7000) : Infinity;
       this.gazeUntil = this.stateAt + rand(500, 1400);
@@ -351,20 +536,69 @@
       };
     }
 
+    seekEye(index, { snap = false } = {}) {
+      const list = this.playlists[this.state];
+      if (!list?.length) return;
+      const i = ((index % list.length) + list.length) % list.length;
+      this.eyeIdx = i;
+      if (snap) {
+        this.eyeFrom = list[i];
+        this.eyeTo = list[i];
+        this.eyeMorph.x = 1;
+        this.eyeMorph.t = 1;
+        this.eyeMorph.v = 0;
+        this._fromPolys = null;
+      } else {
+        this._morphEyes(list[i], this.state === "searching" || this.state === "excited" ? 10 : 6);
+      }
+      const hold = rand(...(EYE_HOLD_MS[this.state] || [2000, 3600]));
+      this.eyeHoldMs = hold;
+      this.eyeRemain = hold;
+      this.eyeUntil = this._clock() + hold;
+      this._wake();
+    }
+
+    setPlaylistHold(on) {
+      const next = !!on;
+      if (next === this.playlistHold) return;
+      if (next) this.eyeRemain = Math.max(0, this.eyeUntil - this._clock());
+      else {
+        this.eyeUntil = this._clock() + (this.eyeRemain || 0);
+        this._wake();
+      }
+      this.playlistHold = next;
+    }
+
+    playback() {
+      const remain = this.playlistHold
+        ? (this.eyeRemain || 0)
+        : Math.max(0, this.eyeUntil - this._clock());
+      return {
+        state: this.state,
+        eyeIdx: this.eyeIdx || 0,
+        holdMs: this.eyeHoldMs || 0,
+        remainMs: remain,
+        held: !!this.playlistHold,
+        frozen: !!this.frozen,
+      };
+    }
+
     spinOnce(turns = 1) {
+      if (this.manualHold) return;
       this._wake();
       this._pn(turns);
     }
     bounceOnce() {
+      if (this.manualHold) return;
       this._wake();
       this._hop(performance.now());
     }
     burstOnce() {
-      if (!this.reduceMotion && !this.paused) this.particles.burst(22, 1.1, 0.3);
+      if (!this.manualHold && !this.reduceMotion && !this.paused) this.particles.burst(22, 1.1, 0.3);
     }
 
     orbitGaze(ms = 1500) {
-      if (this.reduceMotion || this.frozen) return;
+      if (this.reduceMotion || this.frozen || this.manualHold) return;
       this.gazeOrbit = { at: performance.now(), dur: Math.max(ms, 1), from: Math.PI * 2 };
       this._armTick();
     }
@@ -372,6 +606,7 @@
     holdFrame(at = 900) {
       this.frozen = true;
       this.paused = true;
+      this.holdAt = at;
       if (this._raf) {
         cancelAnimationFrame(this._raf);
         this._raf = 0;
@@ -409,6 +644,11 @@
       const gz = HOLD_GAZE[this.state] || { x: 0, y: 0 };
       snapSpring(this.gazeX, gz.x);
       snapSpring(this.gazeY, gz.y);
+      const holdEye = this.eyePinned ? null : HOLD_EYE[this.state];
+      if (holdEye != null && this.geo.eyes[holdEye]) {
+        this.eyeFrom = holdEye;
+        this.eyeTo = holdEye;
+      }
       this.eyeMorph.x = 1;
       this.eyeMorph.v = 0;
       this.eyeMorph.t = 1;
@@ -514,6 +754,19 @@
       this.clipPath.setAttribute("d", geo.shapes[this.shapeName].path);
     }
 
+    _poseRing(restRing, R, spinAmt, morphing) {
+      // Sphere limb is rotation-invariant. Only solids-of-revolution change
+      // silhouette with yaw (same path as the spin trick). Tilt-squash was
+      // flattening the ball into a coin.
+      const yaw = this.manualHold ? ((this.pose.turn - this.poseRest.turn) * Math.PI) / 180 : 0;
+      const spinning = spinAmt != null;
+      const yawAmt = (spinAmt ?? 0) + yaw;
+      if (morphing || Math.abs(yawAmt) < 1e-5) return { ring: restRing, turned: false };
+      const turnAt = FX.turnAtOf(this.shapeName, this.geo.shapes[this.shapeName].path, R, this.geo.solids);
+      if (!turnAt) return { ring: restRing, turned: false };
+      return { ring: turnAt(yawAmt), turned: true };
+    }
+
     _morphEyes(index, stiffness = 7) {
       if (index === this.eyeTo && this.eyeMorph.t === 1) return;
       const t = clamp(this.eyeMorph.x, 0, 1);
@@ -544,7 +797,7 @@
     }
 
     _cycleShapeTrick() {
-      if (this.reduceMotion || this.paused || this.driven) return;
+      if (this.reduceMotion || this.paused || this.driven || this.manualHold) return;
       this.trickCycle = (this.trickCycle + 1) % 5;
       this.wildWide = false;
       if (this.trickCycle === 0) this._pn(1);
@@ -654,16 +907,21 @@
         prev: this.poseOut,
       });
       this.poseOut = pose;
-      this.spin.t = pose.spin;
-      this.tx.t = pose.tx;
-      this.ty.t = pose.ty;
-      this.squash.t = pose.squash;
-      this.eyeScale.t = pose.eyeBoost;
-      if (this.ctx.tyKick) {
+      this.spin.t = this.manualHold ? 0 : pose.spin;
+      this.tx.t = this.manualHold ? 0 : pose.tx;
+      this.ty.t = this.manualHold ? 0 : pose.ty;
+      this.squash.t = this.manualHold ? 1 : pose.squash;
+      this.eyeScale.t = this.manualHold ? 1 : pose.eyeBoost;
+      if (this.manualHold) {
+        this.blink.t = 1;
+        this.gazeX.t = 0;
+        this.gazeY.t = 0;
+      }
+      if (!this.manualHold && this.ctx.tyKick) {
         this.ty.v += this.ctx.tyKick;
         this.ctx.tyKick = 0;
       }
-      if (this.ctx.spinKick) {
+      if (!this.manualHold && this.ctx.spinKick) {
         this.spin.v += this.ctx.spinKick;
         this.ctx.spinKick = 0;
       }
@@ -684,24 +942,33 @@
         EY.queueBlink(this.blinkQueue, now);
         this.ctx.wantBlink = false;
       }
-      if (this.ctx.wantPn) {
+      if (!this.manualHold && this.ctx.wantPn) {
         this._pn(...this.ctx.wantPn);
         this.ctx.wantPn = null;
       }
-      if (this.ctx.wantBurst) {
+      if (!this.manualHold && this.ctx.wantBurst) {
         this.particles.burst(this.ctx.wantBurst[0], this.ctx.wantBurst[1]);
         this.ctx.wakingBurst = true;
         this.ctx.wantBurst = null;
       }
 
-      this._stepOverlay(now);
+      if (this.manualHold) {
+        this.ovKind = null;
+        this.ovPrev = null;
+        this.ovTarget = null;
+        this.overlay.t = 0;
+        this.notify.t = 0;
+        this.humDots.t = 0;
+      } else {
+        this._stepOverlay(now);
+      }
 
-      if (this.celebrateAt > 0 && now >= this.celebrateAt && !this.trick) {
+      if (!this.manualHold && this.celebrateAt > 0 && now >= this.celebrateAt && !this.trick) {
         this.trick = TR.startTrick("spinWild", this.reduceMotion || this.paused);
         this.celebrateAt = now + 6200;
       }
 
-      if (!this.driven && now >= this.trickAt) {
+      if (!this.driven && !this.manualHold && now >= this.trickAt) {
         if ((V_T.has(this.state) || B_T.has(this.state)) && !this.spinTurn && this.hopAt < 0 && !this.trick) {
           const z = Math.random();
           if (V_T.has(this.state)) {
@@ -725,14 +992,17 @@
       }
       this.extras = { ...tf, turn: tf.turn, hop };
 
-      if (this.extras.eyeBoost != null) this.eyeScale.t = this.extras.eyeBoost;
+      if (!this.manualHold && this.extras.eyeBoost != null) this.eyeScale.t = this.extras.eyeBoost;
 
-      if (this.state !== "waking" && this.state !== "sleeping" && now >= this.eyeUntil) {
+      if (this.state !== "waking" && this.state !== "sleeping" && !this.playlistHold && now >= this.eyeUntil) {
         const list = this.playlists[this.state];
         this.eyeIdx = (this.eyeIdx + 1 + Math.floor(rand(0, list.length - 1))) % list.length;
         const stiff = this.state === "searching" || this.state === "excited" ? 10 : 6;
         this._morphEyes(list[this.eyeIdx], stiff);
-        this.eyeUntil = now + rand(...EYE_HOLD_MS[this.state]);
+        const hold = rand(...EYE_HOLD_MS[this.state]);
+        this.eyeHoldMs = hold;
+        this.eyeRemain = hold;
+        this.eyeUntil = now + hold;
       }
 
       const blinkCadence = BLINK_MS[this.state];
@@ -741,16 +1011,18 @@
         this.blinkUntil = now + rand(...blinkCadence);
       }
       const blinkKey = EY.consumeBlink(this.blinkQueue, now);
-      this.blink.t = blinkKey ?? (this.blinkQueue.length ? this.blink.t : (this.extras.lidMul ?? pose.lid));
+      this.blink.t = this.paused && this.manualHold
+        ? 1
+        : blinkKey ?? (this.blinkQueue.length ? this.blink.t : (this.extras.lidMul ?? pose.lid));
 
-      if (now >= this.gazeUntil) {
+      if (!this.manualHold && now >= this.gazeUntil) {
         const gz = nextGaze(this.state);
         this.gazeX.t = gz.x;
         this.gazeY.t = gz.y;
         this.gazeUntil = now + rand(...gz.hold);
       }
 
-      if (WINK_STATES.has(this.state) && now >= this.winkUntil) {
+      if (!this.manualHold && WINK_STATES.has(this.state) && now >= this.winkUntil) {
         this.winkAt = now;
         this.winkEye = Math.random() < 0.5 ? 0 : 1;
         this.winkUntil = now + rand(4500, 10000);
@@ -758,21 +1030,21 @@
 
       this.emphasisBlend += ((this.emphasis ? 1 : 0) - this.emphasisBlend) * Rn(0.12);
 
-      if (this.emphasis) {
+      if (this.emphasis && !this.manualHold) {
         this.eyeScale.t = Math.max(this.eyeScale.t, 1.32);
         this.blink.t = Math.max(this.blink.t, 1.18);
       }
 
       const humming = this.state === "humming";
       const loading = this.state === "loading";
-      if ((humming || loading) && !this.reduceMotion) {
+      if ((humming || loading) && !this.reduceMotion && !this.manualHold) {
         const Zt = dtState;
         const dn = loading ? 3 : 1.6;
         const on = Zt < 0.5 ? 7 * K2(Zt / 0.5) : Zt < 1.3 ? 7 + (dn - 7) * K2((Zt - 0.5) / 0.8) : dn + 0.3 * Math.sin(Zt * 0.5);
         this.ovSpin += on * dt;
       }
 
-      if (this.reduceMotion) {
+      if (this.reduceMotion && !this.manualHold) {
         this._morphEyes(this.playlists[this.state][0]);
         this.spin.t = 0; this.tx.t = 0; this.ty.t = 0;
         this.squash.t = 1; this.blink.t = 1; this.eyeScale.t = 1;
@@ -822,8 +1094,10 @@
       } else {
         this.gazeSpin = 0;
       }
-      this.notify.t = this.state === "notifying" ? 1 : 0;
-      this.humDots.t = this.state === "humming" ? 1 : 0;
+      if (!this.manualHold) {
+        this.notify.t = this.state === "notifying" ? 1 : 0;
+        this.humDots.t = this.state === "humming" ? 1 : 0;
+      }
 
       let spinAngle = 0;
       if (this.spinTurn) spinAngle = this.spinTurn.x;
@@ -840,8 +1114,8 @@
       this.particles.update(now, dt, {
         spinAngle,
         sizeScale: this.partScale,
-        wideStyle: this.trick?.kind === "spinWild" || this.wildWide || humming,
-        sustainBelts: humming || loading,
+        wideStyle: !this.manualHold && (this.trick?.kind === "spinWild" || this.wildWide || humming),
+        sustainBelts: !this.manualHold && (humming || loading),
       });
 
       this._updatePointer(now);
@@ -887,7 +1161,7 @@
         return;
       }
 
-      this._raf = requestAnimationFrame((t) => this._tick(t));
+      this._raf = requestAnimationFrame((t) => this._tick(t - this.clockHold));
     }
 
     _paint(now) {
@@ -907,9 +1181,9 @@
       const ov = this.fx.extras(now, this.stateAt, this.ovKind, this.ovPrev, yl, mix);
       const bodyW = 1 - yl;
       const ex = this.extras;
-      const tx = this.tx.x * bodyW + ex.yi * bodyW + ov.yre * yl;
-      const ty = (this.ty.x + ex.hop) * bodyW + ex.ki * bodyW - ov.rX.lift * ov.Lee + ov.aX * yl;
-      const rot = (this.spin.x * bodyW + ex.Kr * bodyW) * tilt + (ex.Yr || 0) * bodyW + ov.wl * yl;
+      const tx = this.tx.x * bodyW + ex.yi * bodyW + ov.yre * yl + this.manualTx;
+      const ty = (this.ty.x + ex.hop) * bodyW + ex.ki * bodyW - ov.rX.lift * ov.Lee + ov.aX * yl + this.manualTy;
+      const rot = (this.spin.x * bodyW + ex.Kr * bodyW) * tilt + (ex.Yr || 0) * bodyW + ov.wl * yl + this.manualSpin;
       const sx = bodyW + ov.wre * yl;
       const sy = this.squash.x * bodyW + ov.wre * yl;
       this.group.setAttribute(
@@ -922,17 +1196,12 @@
       const pencil = this.ovKind === "pencil" || this.ovPrev === "pencil";
       const tear = geo.shapes.teardrop?.path;
       const spinAmt = ex.turn;
-      const spinning = spinAmt != null;
       const restRing = morphing
         ? FX.lerpRing(this.prevRing, FX.shapeRing(shape.path, R), morphK)
         : FX.shapeRing(shape.path, R);
-      let liveRing = restRing;
-      let turned = false;
-      const turnAt = !morphing && spinning ? FX.turnAtOf(this.shapeName, shape.path, R, geo.solids) : null;
-      if (turnAt) {
-        liveRing = turnAt(spinAmt);
-        turned = true;
-      }
+      const posed = this._poseRing(restRing, R, spinAmt, morphing);
+      const liveRing = posed.ring;
+      const turned = posed.turned;
       let faceTop = shape.top;
       let faceBottom = shape.bottom;
       if (morphing || turned) {
@@ -1007,6 +1276,8 @@
         top: faceTop,
         bottom: faceBottom,
         emphasisBlend: this.emphasisBlend,
+        tune: this.eyeTune,
+        manualHold: this.manualHold,
       });
 
       const hum = clamp(this.humDots.x, 0, 1);

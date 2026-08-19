@@ -1,5 +1,5 @@
 const PREFIXE = 'study:'
-const NOMS = ['cycles', 'cycle', 'forme', 'couleur', 'expression', 'langue'] as const
+const NOMS = ['cycles', 'cycle', 'forme', 'couleur', 'expression', 'langue', 'manuel'] as const
 
 export type NomStocke = (typeof NOMS)[number]
 

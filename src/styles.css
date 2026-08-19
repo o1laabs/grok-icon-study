@@ -367,7 +367,7 @@ html::-webkit-scrollbar {
 
   .scene {
     display: grid;
-    grid-template-columns: 0 minmax(0, 1fr) 20rem;
+    grid-template-columns: 0 minmax(0, 1fr) 21.25rem;
     column-gap: 2.5rem;
     transition: grid-template-columns var(--bascule);
     /*
@@ -388,7 +388,7 @@ html::-webkit-scrollbar {
   }
 
   .scene--gauche {
-    grid-template-columns: 20rem minmax(0, 1fr) 0;
+    grid-template-columns: 21.25rem minmax(0, 1fr) 0;
   }
 
   /*
@@ -396,9 +396,9 @@ html::-webkit-scrollbar {
    * bien que ce soit la meme regle —
    *
    * - l'arrivee sur le site, ou c'est le RETOUR a `.scene` (la colonne de droite
-   *   qui reprend ses 20rem) qui fait glisser la boule a sa place ;
+   *   qui reprend ses 21,25rem) qui fait glisser la boule a sa place ;
    * - l'apercu, ou les panneaux sont demontes. Sans cette classe la grille leur
-   *   reserve quand meme leur piste — une colonne de 20rem plus sa gouttiere —
+   *   reserve quand meme leur piste — une colonne de 21,25rem plus sa gouttiere —
    *   et l'avatar se retrouve centre dans une colonne decalee, donc a 180 px a
    *   gauche du centre de l'ecran. Demonter un panneau ne retire pas sa piste.
    *
@@ -434,6 +434,10 @@ html::-webkit-scrollbar {
 
   .avatar--geant {
     transform: translate(30vw, 14vh) scale(2.5);
+  }
+
+  .avatar--bas {
+    transform: translate(0, 2.25rem) scale(1);
   }
 
   .scene__gauche {
@@ -518,9 +522,9 @@ html::-webkit-scrollbar {
    * jamais parce qu'elle est posee sur la FENETRE.
    *
    * `left`/`right` sont exactement les siens : la bande couvre la colonne de
-   * l'avatar (4,5rem = marge + gouttiere ; 24,5rem = panneau + gouttiere + marge)
-   * et centre son contenu. La vue Personnaliser n'a qu'une seule disposition de
-   * grille, donc cette position est constante.
+   * l'avatar (4,5rem = marge + gouttiere ; 24,5rem = panneau + gouttiere +
+   * marge droite) et centre son contenu. La vue Personnaliser n'a qu'une seule
+   * disposition de grille, donc cette position est constante.
    */
   .barre-export {
     position: fixed;
@@ -537,7 +541,7 @@ html::-webkit-scrollbar {
      */
     top: calc(
       2rem + (100dvh - 3rem - var(--timeline)) / 2 +
-        min(460px, 100dvh - var(--timeline) - 7rem) / 2 - 0.5rem
+        min(600px, 100dvh - var(--timeline) - 7rem) / 2 - 0.5rem + 3.25rem
     );
   }
 }
@@ -593,27 +597,47 @@ html::-webkit-scrollbar {
   opacity: 0;
 }
 
-.fondu-enter-active,
-.fondu-leave-active {
-  transition: opacity 0.35s ease-out;
+.playback-host {
+  position: relative;
 }
 
-.fondu-enter-from,
-.fondu-leave-to {
-  opacity: 0;
+.playback-pad {
+  padding-bottom: var(--playback-clearance, 7.5rem);
+}
+
+.playback-dock {
+  position: fixed;
+  z-index: 25;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.playback-dock > * {
+  pointer-events: auto;
+}
+
+@media (width >= 64rem) {
+  .playback-dock {
+    right: 0.75rem;
+    bottom: 0;
+    left: auto;
+    width: 21.25rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .scene,
   .panneau,
   .panneau--ouvert,
-  .avatar,
-  .fondu-enter-active,
-  .fondu-leave-active {
+  .avatar {
     transition: none;
   }
 
-  .barre-export {
+  .barre-export,
+  .playback-bar.is-ready {
     transition: none;
   }
 
@@ -638,3 +662,314 @@ body {
     ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+.manual-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.manual-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.manual-overlay .body-gizmo-hitbox,
+.manual-overlay .body-gizmo-plane-hitbox,
+.manual-overlay .body-gizmo-reset,
+.manual-overlay .editor-control {
+  pointer-events: auto;
+}
+
+.body-gizmo-ring,
+.body-gizmo-axis {
+  fill: none;
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.body-gizmo-hitbox {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: grab;
+}
+
+.body-gizmo-ring {
+  stroke-width: 1.6;
+}
+
+.body-gizmo-hitbox:hover + .body-gizmo-ring,
+.body-gizmo-ring.is-active,
+.body-gizmo-hitbox:hover + .body-gizmo-axis,
+.body-gizmo-axis.is-active {
+  stroke-width: 3.2;
+  filter: brightness(1.1);
+}
+
+.body-gizmo-handle {
+  stroke: #fff;
+  stroke-width: 1;
+}
+
+.body-gizmo-handle.gizmo-x,
+.gizmo-x {
+  stroke: #1f9d55;
+  fill: #1f9d55;
+}
+
+.body-gizmo-handle.gizmo-y,
+.gizmo-y {
+  stroke: #d64545;
+  fill: #d64545;
+}
+
+.body-gizmo-handle.gizmo-z,
+.gizmo-z {
+  stroke: #3b63d4;
+  fill: #3b63d4;
+}
+
+.body-gizmo-axis.gizmo-x,
+.body-gizmo-axis.gizmo-y,
+.body-gizmo-ring.gizmo-z {
+  fill: none;
+}
+
+.body-gizmo-origin {
+  fill: #17203a;
+  stroke: #fff;
+  stroke-width: 1.4;
+  pointer-events: none;
+}
+
+.body-gizmo-plane-hitbox {
+  fill: transparent;
+  cursor: move;
+}
+
+.body-gizmo-plane-hitbox:hover + .body-gizmo-origin,
+.body-gizmo-origin.is-active {
+  fill: #3b63d4;
+}
+
+.body-gizmo-reset {
+  cursor: pointer;
+}
+
+.body-gizmo-reset circle {
+  fill: rgb(255 255 255 / 92%);
+  stroke: rgb(23 32 58 / 16%);
+}
+
+.body-gizmo-reset text {
+  fill: #17203a;
+  font-size: 8px;
+  text-anchor: middle;
+}
+
+.body-gizmo-reset:hover circle,
+.body-gizmo-reset:focus-visible circle {
+  fill: #17203a;
+}
+
+.body-gizmo-reset:hover text,
+.body-gizmo-reset:focus-visible text {
+  fill: #fff;
+}
+
+.body-gizmo-label {
+  fill: #6e7382;
+  font-size: 7px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.wire {
+  fill: none;
+  stroke: rgb(255 255 255 / 28%);
+  stroke-width: 1;
+  pointer-events: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.cyan-outline {
+  stroke: #51ddff;
+  stroke-width: 2.6;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.manual-head-outline {
+  fill: none;
+  stroke: #51ddff;
+  stroke-width: 5.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 1.5px rgb(81 221 255 / 90%)) drop-shadow(0 0 4px rgb(81 221 255 / 32%));
+}
+
+.selection-outline {
+  fill: none;
+  stroke: #51ddff;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.editor-guide {
+  fill: none;
+  stroke: rgb(81 221 255 / 58%);
+  stroke-width: 1.15;
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+
+.editor-control {
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.editor-control:active {
+  cursor: grabbing;
+}
+
+.editor-handle {
+  fill: #111316;
+  stroke: #51ddff;
+  stroke-width: 2;
+}
+
+.editor-label {
+  fill: #fff;
+  font-size: 6px;
+  font-weight: 900;
+  text-anchor: middle;
+  pointer-events: none;
+  user-select: none;
+}
+
+.gizmo-cluster {
+  position: absolute;
+  z-index: 4;
+  top: 2%;
+  right: 2%;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-start;
+  gap: 5px;
+  pointer-events: none;
+}
+
+.gizmo {
+  width: 94px;
+  height: 94px;
+  overflow: visible;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+.gizmo-reset {
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgb(23 32 58 / 12%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 88%);
+  color: #17203a;
+  font-size: 14px;
+  line-height: 1;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.gizmo-reset:hover {
+  background: #17203a;
+  color: #fff;
+}
+
+.gizmo-orbit {
+  fill: none;
+  stroke-width: 2;
+  pointer-events: none;
+  vector-effect: non-scaling-stroke;
+  transition:
+    stroke-width 140ms ease,
+    filter 140ms ease,
+    opacity 140ms ease;
+}
+
+.gizmo-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: ew-resize;
+  pointer-events: stroke;
+  touch-action: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.gizmo-arc:hover .gizmo-orbit,
+.gizmo-orbit.is-active,
+.gizmo-camera-hit:hover + .gizmo-orbit,
+.gizmo-orbit.gizmo-camera.is-active {
+  stroke-width: 5;
+  filter: brightness(1.1);
+}
+
+.gizmo-back .gizmo-orbit {
+  stroke-width: 1.15;
+  opacity: 0.28;
+}
+
+.gizmo-camera {
+  stroke: #c9a227;
+}
+
+.gizmo-orbit.gizmo-x,
+.gizmo-orbit.gizmo-y,
+.gizmo-orbit.gizmo-z {
+  fill: none;
+}
+
+.axis-key {
+  position: absolute;
+  right: 4%;
+  bottom: 3%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #6e7382;
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.axis-key i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+}
+
+.axis-key i.x {
+  background: #1f9d55;
+}
+
+.axis-key i.y {
+  background: #d64545;
+}
+
+.axis-key i.z {
+  background: #3b63d4;
+}
+
+

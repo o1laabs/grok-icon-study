@@ -78,6 +78,28 @@ const fr = {
     blockDurationAria: 'Durée de {state}, {duration}',
     blockRemoveAria: 'Retirer {state}'
   },
+  playback: {
+    details: 'Détails de l’animation',
+    show: 'Afficher les détails de l’animation',
+    hide: 'Masquer les détails de l’animation',
+    playing: 'En lecture',
+    paused: 'En pause',
+    stopped: 'Arrêté',
+    play: 'Lancer {name}',
+    pause: 'Mettre {name} en pause',
+    stop: 'Arrêter {name}',
+    mode: 'Mode de lecture',
+    loop: 'boucle',
+    clips: 'Poses',
+    current: 'Pose en cours',
+    stepOf: '{n} / {m}',
+    summary: 'Les poses d’œil de cette expression, en boucle.',
+    blinkFirst: 'Premier clignement',
+    blinkAfter: 'après le lancement',
+    blinkGap: 'Intervalle du clignement',
+    blinkRand: 'tirage aléatoire',
+    blinkOff: 'Désactivé'
+  },
   dialog: {
     cancel: 'Annuler',
     nameCreateTitle: 'Nouveau cycle',
@@ -152,6 +174,22 @@ const fr = {
   units: {
     seconds: '{n} s',
     secondsShort: '{n}s'
+  },
+  manual: {
+    title: 'Réglage manuel',
+    help: 'Une fois activé, glisse le corps pour le tourner, clique un œil pour L/H/S/R/E, ou les anneaux en haut à droite.',
+    on: 'Activer le réglage manuel',
+    reset: 'Réinitialiser',
+    head: 'Rotation de la tête',
+    body: 'Corps',
+    spin: 'Roulis',
+    eyes: 'Yeux',
+    width: 'L',
+    height: 'H',
+    size: 'S',
+    spacing: 'Écart',
+    gizmo: 'Manipulateur de rotation',
+    plane: 'Déplacer dans le plan'
   }
 }
 

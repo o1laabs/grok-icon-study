@@ -10,6 +10,7 @@ const props = withDefaults(
     shape?: string
     color?: string
     size?: number
+    eye?: number
     interactive?: boolean
     showLabel?: boolean
     active?: boolean
@@ -29,7 +30,8 @@ async function paint() {
     color: props.color ?? 'black',
     follow: false,
     paper: '#f9f9f9',
-    size: props.size ?? 60
+    size: props.size ?? 60,
+    eye: props.eye
   })
   painted.value = !!mount
 }
@@ -39,7 +41,7 @@ const dirty = ref(false)
 onMounted(() => {
   void paint()
 })
-watch(() => [props.state, props.shape, props.color], () => {
+watch(() => [props.state, props.shape, props.color, props.eye], () => {
   if (!props.active) {
     dirty.value = true
     return

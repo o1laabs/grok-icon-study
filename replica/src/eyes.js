@@ -36,7 +36,7 @@
     const {
       now, polys, morphT, shape, face, faceTune, uniformEyes, eyeScaleProp,
       blinkX, gazeX, gazeY, winkAt, winkEye, turn, cr, pointer, notifyX,
-      overlayX, eyeEls, badgeEl, badgeColor, Re, G9e, VJt, extras, ringHint,
+      overlayX, eyeEls, badgeEl, badgeColor, Re, G9e, VJt, extras, ringHint, manualHold,
     } = opt;
     const pulse = 1 + 0.07 * Math.sin(morphT * Math.PI);
     const $i = {
@@ -47,6 +47,8 @@
       eye: face.eye * (faceTune?.size ?? 1),
       leftDX: face.leftDX ?? 0,
     };
+    const tune = opt.tune || null;
+    if (tune) $i.sx *= clamp(tune.spacing ?? 35, 0, 150) / 35;
     const sX = uniformEyes ? $i.leftDX : 0;
     const cents = [centroid(polys[0]), centroid(polys[1])];
     let a1 = 0, o1 = 0;
@@ -57,8 +59,8 @@
     const _ee = a1 + o1 > 0.5 ? clamp((l1 - pre) / (a1 + o1), 0.35, 4) : 4;
     const Uee = (uniformEyes ? 1 : $i.eye) * clamp(eyeScaleProp, 0.25, 4);
     const oX = Math.min(clamp(opt.eyeBoostX, 0.2, 2) * Uee, _ee / pulse);
-    const Hee = Math.min(oX * clamp(faceTune?.eyeWidth ?? 1, 0.2, 3), _ee / pulse);
-    const u1 = oX * clamp(faceTune?.eyeHeight ?? 1, 0.2, 3);
+    const Hee0 = Math.min(oX * clamp(faceTune?.eyeWidth ?? 1, 0.2, 3), _ee / pulse);
+    const u10 = oX * clamp(faceTune?.eyeHeight ?? 1, 0.2, 3);
     const liveSpan = ringHint
       ? (y) => spanPoly(ringHint, y, Re)
       : spanAt(shape.path, Re);
@@ -76,10 +78,20 @@
       : [Re, shape.top];
 
     for (let i = 0; i < 2; i++) {
+      if (tune && manualHold) continue;
       const poly = polys[i];
       const [Gn, Ti] = cents[i];
       eyeEls[i].setAttribute("d", polyPath(poly));
       const lid = winkLid(blinkX, now, winkAt, winkEye, i);
+      const sideTune = tune?.[i === 0 ? "left" : "right"];
+      const tuneW = sideTune ? clamp(sideTune.width ?? 20, 10, 100) / 20 : 1;
+      const tuneH = sideTune ? clamp(sideTune.height ?? 50, 10, 100) / 50 : 1;
+      const tuneS = sideTune ? clamp(sideTune.size ?? 1, 0.35, 2.2) : 1;
+      const tuneA = sideTune ? (sideTune.angle ?? 0) * Math.PI / 180 : 0;
+      const tuneX = sideTune ? (sideTune.x ?? 0) : 0;
+      const tuneY = sideTune ? (sideTune.y ?? 0) : 0;
+      const Hee = Math.min(Hee0 * tuneW * tuneS, _ee / pulse);
+      const u1 = u10 * tuneH * tuneS;
       const Ea = Gn + (i === 0 ? sX : 0);
       let Ca = Re + $i.x;
       let Wo = (Ea - Re) * $i.sx;
@@ -135,8 +147,8 @@
         Tre = Dke(clamp(Io0 / 0.5, 0, 1));
       }
 
-      let Kj = Math.sin(now * 42e-5 + i) * 1.4 + Math.sin(now * 0.001 + i * 2) * 0.5;
-      let Ko = Math.sin(now * 58e-5 + i) * 0.9;
+      let Kj = manualHold ? 0 : Math.sin(now * 42e-5 + i) * 1.4 + Math.sin(now * 0.001 + i * 2) * 0.5;
+      let Ko = manualHold ? 0 : Math.sin(now * 58e-5 + i) * 0.9;
       if (pointer) {
         const Zl = Rn(0.16);
         pointer.x += (pointer.tx - pointer.x) * Zl;
@@ -170,10 +182,10 @@
         if (Ia2 - Frp > O2) O2 = Ia2 - Frp;
         if (li2 - Frp < Xl) Xl = li2 - Frp;
       }
-      const xre = Ca + Wo + Kj * $i.sx;
+      const xre = Ca + Wo + Kj * $i.sx + tuneX;
       const lX = O2 <= Xl ? clamp(xre, O2, Xl) : (O2 + Xl) / 2;
       let dd = lX + (xre - lX) * (1 - Tre);
-      let Yj = vl;
+      let Yj = vl + tuneY;
       if (notifyX > 0.01) {
         const xr = 20 * clamp(notifyX, 0, 1.4);
         const Fr = dd - Yl[0], Ia = Yj - Yl[1];
@@ -188,18 +200,21 @@
         }
       }
 
+      const rot = tuneA
+        ? ` rotate(${(tuneA * 180 / Math.PI).toFixed(2)})`
+        : "";
       if (use3d) {
         const FrM = clamp((turn != null ? _c : 1) * Hee * pulse, 0.02, 2.4);
         const IaM = clamp(lid * u1 * pulse, 0.02, 2.4);
         const liM = km * FrM, blM = Ree * FrM, IoM = Fee * IaM, uoM = zee * IaM;
         eyeEls[i].setAttribute(
           "transform",
-          `translate(${dd.toFixed(2)} ${Yj.toFixed(2)}) matrix(${liM.toFixed(4)} ${blM.toFixed(4)} ${IoM.toFixed(4)} ${uoM.toFixed(4)} 0 0) translate(${(-Gn).toFixed(2)} ${(-Ti).toFixed(2)})`
+          `translate(${dd.toFixed(2)} ${Yj.toFixed(2)})${rot} matrix(${liM.toFixed(4)} ${blM.toFixed(4)} ${IoM.toFixed(4)} ${uoM.toFixed(4)} 0 0) translate(${(-Gn).toFixed(2)} ${(-Ti).toFixed(2)})`
         );
       } else {
         eyeEls[i].setAttribute(
           "transform",
-          `translate(${dd.toFixed(2)} ${Yj.toFixed(2)}) scale(${Vee.toFixed(4)} ${_2.toFixed(4)}) translate(${(-Gn).toFixed(2)} ${(-Ti).toFixed(2)})`
+          `translate(${dd.toFixed(2)} ${Yj.toFixed(2)})${rot} scale(${Vee.toFixed(4)} ${_2.toFixed(4)}) translate(${(-Gn).toFixed(2)} ${(-Ti).toFixed(2)})`
         );
       }
     }

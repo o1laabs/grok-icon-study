@@ -78,6 +78,28 @@ const zh: typeof fr = {
     blockDurationAria: '{state} 的时长，{duration}',
     blockRemoveAria: '移除 {state}'
   },
+  playback: {
+    details: '动画详情',
+    show: '显示动画详情',
+    hide: '隐藏动画详情',
+    playing: '播放中',
+    paused: '已暂停',
+    stopped: '已停止',
+    play: '播放 {name}',
+    pause: '暂停 {name}',
+    stop: '停止 {name}',
+    mode: '播放模式',
+    loop: '循环',
+    clips: '眼位',
+    current: '当前眼位',
+    stepOf: '{n} / {m}',
+    summary: '这个表情的眼位循环。',
+    blinkFirst: '首次眨眼',
+    blinkAfter: '启动后',
+    blinkGap: '眨眼间隔',
+    blinkRand: '随机抽取',
+    blinkOff: '关闭'
+  },
   dialog: {
     cancel: '取消',
     nameCreateTitle: '新建循环',
@@ -150,6 +172,22 @@ const zh: typeof fr = {
   units: {
     seconds: '{n} 秒',
     secondsShort: '{n}秒'
+  },
+  manual: {
+    title: '手动调节',
+    help: '打开后拖身体转向，点眼睛出 L/H/S/R/E，或拖右上角的环旋转。',
+    on: '启用手动调节',
+    reset: '重置',
+    head: '头部旋转',
+    body: '身体',
+    spin: '扭转',
+    eyes: '眼睛',
+    width: '宽',
+    height: '高',
+    size: '大小',
+    spacing: '间距',
+    gizmo: '旋转控制器',
+    plane: '在画面上平移'
   }
 }
 

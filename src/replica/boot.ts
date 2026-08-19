@@ -1,5 +1,12 @@
 /** Load local geometry, then the replica IIFE engine. Missing geometry keeps the chrome. */
 
+export type ReplicaParts = {
+  svg: SVGSVGElement
+  body: SVGPathElement
+  eyes: SVGPathElement[]
+  group: SVGGElement
+}
+
 export type ReplicaBot = {
   setState: (name: string, opts?: { resetEyes?: boolean }) => void
   setShape: (name: string) => void
@@ -7,14 +14,33 @@ export type ReplicaBot = {
   setFollowPointer: (on: boolean) => void
   setEyeColor: (color: string | null) => void
   setPaused: (on: boolean | 'hold-pose') => void
+  setPose: (pose: { turn?: number; tilt?: number; roll?: number }) => void
+  setManualOffset: (offset: { tx?: number; ty?: number; spin?: number }) => void
+  setEyeTune: (tune: unknown) => void
+  setManualHold: (on: boolean) => void
+  flushPerformance: () => void
+  parts: () => ReplicaParts
   spinOnce: (turns?: number) => void
   bounceOnce: () => void
   burstOnce: () => void
   orbitGaze: (ms?: number) => void
   holdFrame: (at?: number) => void
+  freezeNow: (opts?: { settle?: boolean }) => ReplicaPlayback
   step: (dt: number) => void
   setSize: (px: number) => void
+  seekEye: (index: number, opts?: { snap?: boolean }) => void
+  setPlaylistHold: (on: boolean) => void
+  playback: () => ReplicaPlayback
   destroy: () => void
+}
+
+export type ReplicaPlayback = {
+  state: string
+  eyeIdx: number
+  holdMs: number
+  remainMs: number
+  held: boolean
+  frozen: boolean
 }
 
 declare global {
@@ -26,6 +52,9 @@ declare global {
     }
     GROK_TABLES?: {
       GROUPS: Array<{ label: string; states: string[] }>
+      EYE_PLAYLIST?: Record<string, number[]>
+      EYE_HOLD_MS?: Record<string, [number, number]>
+      BLINK_MS?: Record<string, [number, number] | null>
       INK: Record<string, { lightFrom?: string; lightTo: string; darkFrom?: string; darkTo?: string }>
     }
     GrokCharacter?: new (svg: SVGSVGElement, opts: Record<string, unknown>) => ReplicaBot
@@ -42,6 +71,7 @@ function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const existing = document.querySelector(`script[data-replica="${src}"]`)
     if (existing) {
+      // IIFE already evaluated. replica/src/*.js changes need a full page refresh.
       resolve()
       return
     }

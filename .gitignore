@@ -14,6 +14,9 @@ replica/grok-blob-idle.svg
 /tmp/
 snap-out/
 
+# Upstream reference checkout for editor/geometry comparison
+bible-strong-avatar-lab/
+
 # Never commit unpacked app dumps, unpack scripts, or third-party marks
 extracted/
 extract-asar.js

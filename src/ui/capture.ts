@@ -21,6 +21,12 @@ export function svgAutonome(svg: SVGSVGElement, taille: number, viewBox = viewBo
 
 function flattenSvg(root: SVGSVGElement) {
   const clone = root.cloneNode(true) as SVGSVGElement
+  clone.querySelectorAll('.manual-wires, .manual-head-outline').forEach((el) => el.remove())
+  clone.querySelectorAll('.cyan-outline').forEach((el) => {
+    el.classList.remove('cyan-outline')
+    el.removeAttribute('stroke')
+    el.removeAttribute('stroke-width')
+  })
   const walk = (src: Element, dst: Element) => {
     const cs = getComputedStyle(src)
     for (const attr of ['fill', 'stroke'] as const) {
@@ -36,7 +42,9 @@ function flattenSvg(root: SVGSVGElement) {
       }
       dst.setAttribute('style', next)
     }
-    const kids = [...src.children]
+    const kids = [...src.children].filter(
+      (child) => !child.matches('.manual-wires, .manual-head-outline')
+    )
     const copies = [...dst.children]
     for (let i = 0; i < kids.length; i++) walk(kids[i]!, copies[i]!)
   }

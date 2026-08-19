@@ -73,7 +73,20 @@ watch(
 defineExpose({
   spin: () => replica?.spin(),
   orbitGaze: (ms?: number) => replica?.orbitGaze(ms),
-  svg: () => svg.value
+  svg: () => svg.value,
+  setPose: (pose: { turn?: number; tilt?: number; roll?: number }) => replica?.setPose(pose),
+  setManualOffset: (offset: { tx?: number; ty?: number; spin?: number }) =>
+    replica?.setManualOffset(offset),
+  setEyeTune: (tune: unknown) => replica?.setEyeTune(tune),
+  setManualHold: (on: boolean) => replica?.setManualHold(on),
+  flushPerformance: () => replica?.flushPerformance(),
+  seekEye: (index: number, opts?: { snap?: boolean }) => replica?.seekEye(index, opts),
+  setPlaylistHold: (on: boolean) => replica?.setPlaylistHold(on),
+  setPaused: (on: boolean | 'hold-pose') => replica?.setPaused(on),
+  holdFrame: (at?: number) => replica?.holdFrame(at),
+  freezeNow: (opts?: { settle?: boolean }) => replica?.freezeNow(opts) ?? null,
+  playback: () => replica?.playback() ?? null,
+  parts: () => replica?.parts() ?? null
 })
 </script>
 

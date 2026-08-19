@@ -146,7 +146,7 @@ function onRemove() {
     4,5rem = la marge de la scene (2rem) + la gouttiere de la grille (2,5rem) : la
     colonne de gauche a une largeur NULLE en dehors des reglages, mais la grille
     garde son `column-gap`, donc la colonne de l'avatar commence a 72 px et non a
-    32. C'est la symetrie de 24,5rem = panneau (20) + gouttiere (2,5) + marge (2).
+    32. C'est la symetrie de 24,5rem = panneau (21,25) + gouttiere (2,5) + marge (0,75).
 
     Le FOND n'apparait que sous 64rem, et ce n'est pas un choix d'habillage.
     Au-dessus, la page ne defile pas (`#app { overflow: clip }`) et la scene
@@ -167,7 +167,7 @@ function onRemove() {
          qui defile derriere. Le bouton, lui, reste — un disque plein se lit
          par-dessus n'importe quoi, et il est la commande principale de la vue. La
          meme paire de valeurs est de toute facon affichee dans la barre d'outils,
-         en bas a droite. -->
+         en bas a gauche. -->
     <div class="absolute -top-5 left-1/2 flex -translate-x-1/2 items-center gap-3">
       <span class="text-sm font-medium tabular-nums max-lg:hidden">{{ mmss(at) }}</span>
       <button
@@ -262,13 +262,13 @@ function onRemove() {
         @seek="emit('seek', $event)"
       />
 
-      <!-- barre d'outils, dans le coin : loupe, compteur, aperçu -->
-      <div class="flex shrink-0 items-center justify-end gap-4 max-sm:gap-2">
-        <ZoomSlider v-model:zoom="zoom" :min="MIN_ZOOM" :max="MAX_ZOOM" />
-
-        <p class="text-xs tabular-nums text-[var(--muted)]">
+      <!-- barre d'outils : le temps a gauche, loupe et apercu a droite -->
+      <div class="flex shrink-0 items-center gap-4 max-sm:gap-2">
+        <p class="mr-auto text-xs tabular-nums text-[var(--muted)]">
           <span class="text-[var(--ink)]">{{ mmss(at) }}</span> / {{ mmss(total) }}
         </p>
+
+        <ZoomSlider v-model:zoom="zoom" :min="MIN_ZOOM" :max="MAX_ZOOM" />
 
         <!-- infobulle au survol ET au focus clavier, comme la barre laterale -->
         <span class="group relative flex">

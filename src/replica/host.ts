@@ -1,4 +1,10 @@
-import { loadReplica, replicaReady, type ReplicaBot } from './boot'
+import {
+  loadReplica,
+  replicaReady,
+  type ReplicaBot,
+  type ReplicaParts,
+  type ReplicaPlayback
+} from './boot'
 
 export type ReplicaMount = {
   apply: (input: ReplicaInput) => void
@@ -6,6 +12,18 @@ export type ReplicaMount = {
   orbitGaze: (ms?: number) => void
   step: (dt: number) => void
   setState: (name: string) => void
+  setPose: (pose: { turn?: number; tilt?: number; roll?: number }) => void
+  setManualOffset: (offset: { tx?: number; ty?: number; spin?: number }) => void
+  setEyeTune: (tune: unknown) => void
+  setManualHold: (on: boolean) => void
+  flushPerformance: () => void
+  seekEye: (index: number, opts?: { snap?: boolean }) => void
+  setPlaylistHold: (on: boolean) => void
+  setPaused: (on: boolean | 'hold-pose') => void
+  holdFrame: (at?: number) => void
+  freezeNow: (opts?: { settle?: boolean }) => ReplicaPlayback | null
+  playback: () => ReplicaPlayback | null
+  parts: () => ReplicaParts | null
   destroy: () => void
 }
 
@@ -16,6 +34,7 @@ export type ReplicaInput = {
   follow: boolean
   paper: string
   size: number
+  eye?: number
 }
 
 const TILE_MAX = 6
@@ -75,7 +94,8 @@ export async function mountReplica(
     followPointer: live && input.follow && !driven,
     eyeColor: input.paper,
     paused: driven ? false : live ? false : 'hold-pose',
-    driven
+    driven,
+    eyeIndex: input.eye
   })
   const noop = {
     apply: () => {},
@@ -83,6 +103,18 @@ export async function mountReplica(
     orbitGaze: () => {},
     step: () => {},
     setState: () => {},
+    setPose: () => {},
+    setManualOffset: () => {},
+    setEyeTune: () => {},
+    setManualHold: () => {},
+    flushPerformance: () => {},
+    seekEye: () => {},
+    setPlaylistHold: () => {},
+    setPaused: () => {},
+    holdFrame: () => {},
+    freezeNow: () => null,
+    playback: () => null,
+    parts: () => null,
     destroy: () => {}
   }
   if (!live && !driven) {
@@ -109,6 +141,18 @@ export async function mountReplica(
       bot.setState(name, { resetEyes: true })
       last = { ...last, state: name }
     },
+    setPose: (pose) => bot.setPose(pose),
+    setManualOffset: (offset) => bot.setManualOffset(offset),
+    setEyeTune: (tune) => bot.setEyeTune(tune),
+    setManualHold: (on) => bot.setManualHold(on),
+    flushPerformance: () => bot.flushPerformance(),
+    seekEye: (index, opts) => bot.seekEye(index, opts),
+    setPlaylistHold: (on) => bot.setPlaylistHold(on),
+    setPaused: (on) => bot.setPaused(on),
+    holdFrame: (at) => bot.holdFrame(at),
+    freezeNow: (opts) => bot.freezeNow(opts),
+    playback: () => bot.playback(),
+    parts: () => bot.parts(),
     destroy: () => bot.destroy()
   }
 }

@@ -79,6 +79,28 @@ const en: typeof fr = {
     blockDurationAria: 'Duration of {state}, {duration}',
     blockRemoveAria: 'Remove {state}'
   },
+  playback: {
+    details: 'Animation details',
+    show: 'Show animation details',
+    hide: 'Hide animation details',
+    playing: 'Playing',
+    paused: 'Paused',
+    stopped: 'Stopped',
+    play: 'Play {name}',
+    pause: 'Pause {name}',
+    stop: 'Stop {name}',
+    mode: 'Playback mode',
+    loop: 'loop',
+    clips: 'Poses',
+    current: 'Current pose',
+    stepOf: '{n} / {m}',
+    summary: 'The eye poses of this expression, looping.',
+    blinkFirst: 'First blink',
+    blinkAfter: 'after launch',
+    blinkGap: 'Blink interval',
+    blinkRand: 'randomized',
+    blinkOff: 'Off'
+  },
   dialog: {
     cancel: 'Cancel',
     nameCreateTitle: 'New cycle',
@@ -152,6 +174,22 @@ const en: typeof fr = {
   units: {
     seconds: '{n} s',
     secondsShort: '{n}s'
+  },
+  manual: {
+    title: 'Manual adjust',
+    help: 'When on, drag the body to turn it, click an eye for L/H/S/R/E, or drag the rings at the top right.',
+    on: 'Enable manual adjust',
+    reset: 'Reset',
+    head: 'Head rotation',
+    body: 'Body',
+    spin: 'Spin',
+    eyes: 'Eyes',
+    width: 'W',
+    height: 'H',
+    size: 'S',
+    spacing: 'Gap',
+    gizmo: 'Rotation gizmo',
+    plane: 'Move in the picture plane'
   }
 }
 

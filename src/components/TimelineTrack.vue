@@ -393,7 +393,6 @@ function onRulerMove(e: PointerEvent) {
               data-carte
               aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight ArrowLeft ArrowRight"
               @keydown.enter.prevent="block = i"
-              @keydown.space.prevent="block = i"
               @keydown.left="onCardKey(i, $event)"
               @keydown.right="onCardKey(i, $event)"
             >
