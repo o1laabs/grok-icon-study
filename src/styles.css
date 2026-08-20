@@ -573,6 +573,11 @@ html::-webkit-scrollbar {
   transform: translate(0, 0) scale(1.06);
 }
 
+.avatar--intro .gizmo-cluster,
+.avatar--intro .axis-key {
+  display: none;
+}
+
 @starting-style {
   .avatar--intro {
     opacity: 0;
