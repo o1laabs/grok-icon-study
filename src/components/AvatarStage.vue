@@ -157,6 +157,7 @@ defineExpose({
       v-if="active && manual"
       :manual="manual"
       :hero="liveHero"
+      :shape="shape"
       @update:pose="(pose: HeadPose) => patch({ pose })"
       @update:selected="(selected: ManualPart | null) => patch({ selected })"
       @update:eyes="(eyes: EyeTune) => patch({ eyes })"

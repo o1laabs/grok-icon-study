@@ -225,29 +225,15 @@ export const unitVector = (
   return [x / length, y / length]
 }
 
-const polyline = (points: Point3[]) => {
-  if (points.length < 2) return ''
-  return `M${points[0]![0].toFixed(2)} ${points[0]![1].toFixed(2)}${points
-    .slice(1)
-    .map((point) => `L${point[0].toFixed(2)} ${point[1].toFixed(2)}`)
-    .join('')}`
-}
-
-const visibleWire = (points: Point3[]) => {
-  const segments: Point3[][] = []
-  let segment: Point3[] = []
-  for (const point of points) {
-    if (point[2] > 0) segment.push(point)
-    else if (segment.length) {
-      segments.push(segment)
-      segment = []
-    }
-  }
-  if (segment.length) segments.push(segment)
-  return segments
-    .filter((item) => item.length > 1)
-    .map(polyline)
-    .join('')
+export const projectLocalPoint = (
+  pose: HeadPose,
+  local: Point3,
+  origin: readonly [number, number] = [0, 0],
+  home: HeadPose = POSE_HOME
+): Point3 => {
+  const rotated = rotateWithQuaternion(screenOrientation(pose, home), local)
+  const scale = FOCAL / Math.max(FOCAL - rotated[2] * PERSPECTIVE, 0.0001)
+  return [origin[0] + rotated[0] * scale, origin[1] + rotated[1] * scale, rotated[2]]
 }
 
 export const roundedRectangle = (width: number, height: number): (readonly [number, number])[] => {
@@ -331,26 +317,4 @@ export const projectFacePoint = (
     origin[1] + rotated[1] * radius * scale,
     rotated[2]
   ]
-}
-
-export const wirePaths = (
-  pose: HeadPose,
-  radius: number,
-  origin: readonly [number, number] = [0, 0]
-): string[] => {
-  const project = (longitude: number, latitude: number): Point3 =>
-    projectFacePoint(
-      pose,
-      longitude * radius,
-      latitude * radius,
-      radius,
-      origin
-    )
-  const parallels = [-60, -30, 0, 30, 60].map((latitude) =>
-    Array.from({ length: 73 }, (_, index) => project(radians(-180 + index * 5), radians(latitude)))
-  )
-  const meridians = Array.from({ length: 12 }, (_, index) => -150 + index * 30).map((longitude) =>
-    Array.from({ length: 37 }, (_, step) => project(radians(longitude), radians(-90 + step * 5)))
-  )
-  return [...parallels, ...meridians].map(visibleWire).filter(Boolean)
 }

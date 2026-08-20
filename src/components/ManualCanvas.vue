@@ -13,10 +13,10 @@ import {
   rotationRing,
   splitRingArcs,
   unitVector,
-  wirePaths,
   type HeadPose,
   type Point3
 } from '@/ui/pose/math'
+import { surfaceOf, wirePaths } from '@/ui/pose/surface'
 import {
   clampEyes,
   clampPose,
@@ -49,6 +49,7 @@ export type HeroHandle = {
 const props = defineProps<{
   manual: ManualState
   hero: HeroHandle | null
+  shape?: string
 }>()
 
 const emit = defineEmits<{
@@ -369,7 +370,9 @@ const paintWires = () => {
   const group = ensureWires()
   if (!group) return
   const radius = engineRadius()
-  const paths = showWire.value ? wirePaths(pose.value, radius, [radius, radius]) : []
+  const paths = showWire.value
+    ? wirePaths(pose.value, surfaceOf(props.shape || 'blob'), [radius, radius])
+    : []
   const ns = 'http://www.w3.org/2000/svg'
   while (group.childNodes.length > paths.length) group.lastChild?.remove()
   paths.forEach((d, index) => {
@@ -438,10 +441,21 @@ const setBodyCursor = (cursor: string) => {
   parts.body.style.cursor = cursor
 }
 
+const selectBody = () => {
+  if (selected.value !== 'body') emit('update:selected', 'body')
+}
+
+const isEyeTarget = (target: EventTarget | null) => {
+  if (!(target instanceof Element)) return false
+  if (target.closest('.editor-control')) return true
+  const eyes = props.hero?.parts()?.eyes
+  return !!eyes?.some((el) => el === target || el.contains(target))
+}
+
 const startArcball = (event: PointerEvent) => {
   const point = localOf(event)
   if (!point) return
-  if (selected.value !== 'left' && selected.value !== 'right') emit('update:selected', 'body')
+  selectBody()
   poseSession = beginManipulation(pose.value)
   drag.value = {
     kind: 'arcball',
@@ -659,6 +673,12 @@ const onEyeDown = (side: 'left' | 'right') => (event: PointerEvent) => {
   emit('update:selected', side)
 }
 
+const onBlankDown = (event: PointerEvent) => {
+  if (event.button !== 0) return
+  if (isEyeTarget(event.target)) return
+  if (selected.value === 'left' || selected.value === 'right') selectBody()
+}
+
 const bindParts = () => {
   const parts = props.hero?.parts()
   if (!parts) return () => {}
@@ -711,6 +731,7 @@ watch(
 
 onMounted(() => {
   window.addEventListener('keydown', onKey, true)
+  window.addEventListener('pointerdown', onBlankDown, true)
   raf = requestAnimationFrame(tick)
   syncOverlay()
   unbind = bindParts()
@@ -720,6 +741,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey, true)
+  window.removeEventListener('pointerdown', onBlankDown, true)
   cancelAnimationFrame(raf)
   stop()
   unbind()
