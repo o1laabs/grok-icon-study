@@ -1,6 +1,6 @@
-import type fr from './fr'
+import type zh from './zh'
 
-const en: typeof fr = {
+const en: typeof zh = {
   app: {
     name: 'study',
     title: 'study — spring character',

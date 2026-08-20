@@ -2,23 +2,20 @@ import { computed, ref, watchEffect } from 'vue'
 import { ecris, lis } from '@/ui/stockage'
 import { formePlurielle, interpoler } from './format'
 import { choisirLangue, estLangue, type Langue, tagDe } from './langues'
-import fr from './locales/fr'
 import en from './locales/en'
 import zh from './locales/zh'
 
 export { LANGUES, type Langue } from './langues'
 
-const dictionnaires: Record<Langue, typeof fr> = { fr, en, zh }
+const dictionnaires: Record<Langue, typeof zh> = { zh, en }
 
 type Chemins<T, P extends string = ''> = {
   [K in keyof T & string]: T[K] extends string ? `${P}${K}` : Chemins<T[K], `${P}${K}.`>
 }[keyof T & string]
 
-export type Cle = Chemins<typeof fr>
+export type Cle = Chemins<typeof zh>
 
-const courante = ref<Langue>(
-  choisirLangue(lis('langue'), typeof navigator === 'undefined' ? [] : (navigator.languages ?? [navigator.language]))
-)
+const courante = ref<Langue>(choisirLangue(lis('langue')))
 
 export const langue = computed<Langue>({
   get: () => courante.value,

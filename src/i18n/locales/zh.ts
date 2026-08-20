@@ -1,6 +1,4 @@
-import type fr from './fr'
-
-const zh: typeof fr = {
+const zh = {
   app: {
     name: 'study',
     title: 'study — 弹簧角色',
