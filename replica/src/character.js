@@ -21,6 +21,7 @@
     s.x = s.t = v;
     s.v = 0;
   };
+  const springBusy = (s) => Math.abs(s.x - s.t) > 0.002 || Math.abs(s.v) > 0.04;
 
   const HOLD_GAZE = {
     curious: { x: 12, y: -6 }, sad: { x: 2, y: 8 }, shy: { x: 10, y: 7 },
@@ -51,6 +52,7 @@
       this.poseRest = { turn: this.pose.turn, tilt: this.pose.tilt, roll: this.pose.roll };
       this.poseHome = opts.poseHome || (this.loginWrap ? POSE_HOME : { turn: 0, tilt: 0, roll: 0 });
       this.manualHold = false;
+      this.manualMix = spring(0);
       this.manualTx = 0;
       this.manualTy = 0;
       this.manualSpin = 0;
@@ -222,7 +224,7 @@
       this.frozenAt = 0;
       this.frozen = false;
       this.paused = !!v;
-      if (!this.paused) this._armTick();
+      this._armTick();
     }
 
     _armTick() {
@@ -237,7 +239,7 @@
         this._paint(this.last || this.t0);
         return;
       }
-      if (this.paused) this._armTick();
+      this._armTick();
     }
 
     step(dt) {
@@ -316,20 +318,37 @@
       this._wake();
     }
 
+    _mix() {
+      return clamp(this.manualMix.x, 0, 1);
+    }
+
+    _angLerp(from, to, t) {
+      let d = to - from;
+      while (d > 180) d -= 360;
+      while (d < -180) d += 360;
+      return from + d * t;
+    }
+
+    _poseNow() {
+      const k = this._mix();
+      return {
+        turn: this._angLerp(this.poseRest.turn, this.pose.turn, k),
+        tilt: this._angLerp(this.poseRest.tilt, this.pose.tilt, k),
+        roll: this._angLerp(this.poseRest.roll, this.pose.roll, k),
+        scale: this.pose.scale,
+      };
+    }
+
     setManualHold(on) {
       const next = !!on;
-      if (next === this.manualHold) {
-        this._wake();
-        return;
-      }
+      const changed = next !== this.manualHold;
       this.manualHold = next;
       if (next) {
+        this.manualMix.t = 1;
         this.trickAt = Infinity;
         this.gazeUntil = Infinity;
-        snapSpring(this.gazeX, 0);
-        snapSpring(this.gazeY, 0);
-        this.pointer.x = 0;
-        this.pointer.y = 0;
+        this.gazeX.t = 0;
+        this.gazeY.t = 0;
         this.pointer.tx = 0;
         this.pointer.ty = 0;
         this.ctx.wantPn = null;
@@ -339,20 +358,27 @@
         this.ctx.forceSleepEye = false;
         this.ctx.wakeEye = null;
         this.setFollowPointer(false);
-        this._clearFx();
-        this._snapBodyRest();
+        this.trick = null;
+        this.spinTurn = null;
+        this.hopAt = -1;
+        this.wildWide = false;
+        this.ovKind = null;
+        this.ovPrev = null;
+        this.ovTarget = null;
+        this.ovOn = false;
+        this.overlay.t = 0;
+        this.notify.t = 0;
+        this.humDots.t = 0;
+        this.particles?.clear();
+        this.fx?.hideAll();
       } else {
-        this.manualTx = 0;
-        this.manualTy = 0;
-        this.manualSpin = 0;
-        this.eyeTune = null;
-        this.ctx = this._freshCtx(this._clock());
-        this.pose.turn = this.poseRest.turn;
-        this.pose.tilt = this.poseRest.tilt;
-        this.pose.roll = this.poseRest.roll;
-        this.gazeUntil = this._clock();
-        this.blinkUntil = this._clock() + rand(1500, 7000);
-        this.trickAt = this._clock() + rand(4000, 8000);
+        this.manualMix.t = 0;
+        if (changed) {
+          this.ctx = this._freshCtx(this._clock());
+          this.gazeUntil = this._clock();
+          this.blinkUntil = this._clock() + rand(1500, 7000);
+          this.trickAt = this._clock() + rand(4000, 8000);
+        }
       }
       this._wake();
     }
@@ -449,6 +475,7 @@
         this.humDots,
         this.shapeSpring,
         this.overlayTurn,
+        this.manualMix,
       ]) {
         if (settle) s.t = s.x;
         s.v = 0;
@@ -580,6 +607,7 @@
         remainMs: remain,
         held: !!this.playlistHold,
         frozen: !!this.frozen,
+        manualMix: this._mix(),
       };
     }
 
@@ -758,7 +786,7 @@
       // Sphere limb is rotation-invariant. Only solids-of-revolution change
       // silhouette with yaw (same path as the spin trick). Tilt-squash was
       // flattening the ball into a coin.
-      const yaw = this.manualHold ? ((this.pose.turn - this.poseRest.turn) * Math.PI) / 180 : 0;
+      const yaw = ((this.pose.turn - this.poseRest.turn) * Math.PI) / 180 * this._mix();
       const spinning = spinAmt != null;
       const yawAmt = (spinAmt ?? 0) + yaw;
       if (morphing || Math.abs(yawAmt) < 1e-5) return { ring: restRing, turned: false };
@@ -1069,6 +1097,7 @@
         stepSpring(this.overlayMix, ...SPRINGS.overlayMix, step);
         stepSpring(this.shapeSpring, ...SPRINGS.shape, step);
         stepSpring(this.overlayTurn, ...SPRINGS.overlayTurn, step);
+        stepSpring(this.manualMix, ...SPRINGS.manualMix, step);
       }
       if (this.reduceMotion) {
         this.overlayMix.x = 1;
@@ -1132,6 +1161,11 @@
         && !this.spinTurn
         && this.hopAt < 0
         && !this.particles.hasLife()
+        && !springBusy(this.manualMix)
+        && !springBusy(this.spin)
+        && !springBusy(this.tx)
+        && !springBusy(this.ty)
+        && !springBusy(this.squash)
         && Math.abs(this.overlay.x - this.overlay.t) < 0.001
         && Math.abs(this.overlayTurn.t - this.overlayTurn.x) < 0.01
         && this.overlayMix.x > 0.996
@@ -1148,15 +1182,17 @@
         this.shapeSpring.v = 0;
         this.blinkQueue = [];
         this.winkAt = -1e9;
-        const home = this.playlists[this.state]?.[0] ?? 0;
-        this.eyeFrom = home;
-        this.eyeTo = home;
-        this._fromPolys = null;
-        this.eyeMorph.x = 1;
-        this.eyeMorph.v = 0;
-        this.eyeMorph.t = 1;
+        if (!this.manualHold) {
+          const home = this.playlists[this.state]?.[0] ?? 0;
+          this.eyeFrom = home;
+          this.eyeTo = home;
+          this._fromPolys = null;
+          this.eyeMorph.x = 1;
+          this.eyeMorph.v = 0;
+          this.eyeMorph.t = 1;
+        }
         this.poseOut = { spin: 0, tx: 0, ty: 0, squash: 1, lid: 1, eyeBoost: 1 };
-        this._paint(0);
+        this._paint(this.last);
         this._raf = 0;
         return;
       }
@@ -1181,9 +1217,10 @@
       const ov = this.fx.extras(now, this.stateAt, this.ovKind, this.ovPrev, yl, mix);
       const bodyW = 1 - yl;
       const ex = this.extras;
-      const tx = this.tx.x * bodyW + ex.yi * bodyW + ov.yre * yl + this.manualTx;
-      const ty = (this.ty.x + ex.hop) * bodyW + ex.ki * bodyW - ov.rX.lift * ov.Lee + ov.aX * yl + this.manualTy;
-      const rot = (this.spin.x * bodyW + ex.Kr * bodyW) * tilt + (ex.Yr || 0) * bodyW + ov.wl * yl + this.manualSpin;
+      const holdMix = this._mix();
+      const tx = this.tx.x * bodyW + ex.yi * bodyW + ov.yre * yl + this.manualTx * holdMix;
+      const ty = (this.ty.x + ex.hop) * bodyW + ex.ki * bodyW - ov.rX.lift * ov.Lee + ov.aX * yl + this.manualTy * holdMix;
+      const rot = (this.spin.x * bodyW + ex.Kr * bodyW) * tilt + (ex.Yr || 0) * bodyW + ov.wl * yl + this.manualSpin * holdMix;
       const sx = bodyW + ov.wre * yl;
       const sy = this.squash.x * bodyW + ov.wre * yl;
       this.group.setAttribute(
@@ -1236,7 +1273,7 @@
 
       const morphT = clamp(this.eyeMorph.x, 0, 1);
       const polys = this._currentPolys(morphT);
-      const cr = this.eyeTopology ? relRot(this.pose, this.poseHome) : null;
+      const cr = this.eyeTopology ? relRot(this._poseNow(), this.poseHome) : null;
       const overlayLive = yl > 0.001 || Math.abs(this.overlayTurn.t - this.overlayTurn.x) > 0.01;
       let cyl = overlayLive ? this.overlayTurn.x : null;
       if (ex.turn != null) cyl = (cyl ?? 0) + ex.turn;
@@ -1276,9 +1313,19 @@
         top: faceTop,
         bottom: faceBottom,
         emphasisBlend: this.emphasisBlend,
-        tune: this.eyeTune,
-        manualHold: this.manualHold,
+        tune: null,
+        manualHold: false,
+        manualMix: 0,
       });
+      if (holdMix > 0.002) {
+        EY.blendCustomEyes({
+          eyeEls: this.eyeEls,
+          pose: this._poseNow(),
+          eyes: this.eyeTune,
+          svg: this.svg,
+          mix: holdMix,
+        });
+      }
 
       const hum = clamp(this.humDots.x, 0, 1);
       if (hum > 0.01) {

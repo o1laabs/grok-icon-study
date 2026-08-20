@@ -2,14 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import Hero from '@/components/Hero.vue'
 import ManualCanvas, { type HeroHandle } from '@/components/ManualCanvas.vue'
-import {
-  DEFAULT_EYE,
-  DEFAULT_EYES,
-  type EyeSide,
-  type EyeTune,
-  type ManualPart,
-  type ManualState
-} from '@/ui/pose/model'
+import { type EyeTune, type ManualPart, type ManualState } from '@/ui/pose/model'
 import type { HeadPose } from '@/ui/pose/math'
 
 const props = withDefaults(
@@ -22,6 +15,8 @@ const props = withDefaults(
     paper?: string
     manual?: ManualState | null
     tools?: boolean
+    playing?: boolean
+    mix?: number
   }>(),
   {
     size: 440,
@@ -31,7 +26,9 @@ const props = withDefaults(
     follow: false,
     paper: '#f9f9f9',
     manual: null,
-    tools: false
+    tools: false,
+    playing: false,
+    mix: 0
   }
 )
 
@@ -42,7 +39,9 @@ const emit = defineEmits<{
 
 const hero = ref<InstanceType<typeof Hero> | null>(null)
 const liveHero = computed<HeroHandle | null>(() => hero.value)
-const active = computed(() => !!props.manual?.on && props.tools)
+const active = computed(
+  () => !!props.manual?.on && props.tools && !props.playing && props.mix > 0.985
+)
 
 function patch(next: Partial<ManualState>) {
   if (!props.manual) return
@@ -57,38 +56,10 @@ function applyEngine() {
     bot.setManualHold(false)
     return
   }
-  bot.setManualHold(true)
   bot.setPose(manual.pose)
   bot.setManualOffset(manual.offset)
-  bot.setEyeTune(engineEyes(manual.eyes))
-}
-
-function near(a: number, b: number) {
-  return Math.abs(a - b) < 1e-6
-}
-
-function sameSide(a: EyeSide, b: EyeSide) {
-  return (
-    near(a.width, b.width) &&
-    near(a.height, b.height) &&
-    near(a.size, b.size) &&
-    near(a.angle, b.angle) &&
-    near(a.x, b.x) &&
-    near(a.y, b.y)
-  )
-}
-
-function sameEyes(a: EyeTune, b: EyeTune) {
-  return sameSide(a.left, b.left) && sameSide(a.right, b.right) && near(a.spacing, b.spacing)
-}
-
-function engineSide(side: EyeSide): EyeSide {
-  return { ...side, x: side.x - DEFAULT_EYE.x, y: side.y - DEFAULT_EYE.y }
-}
-
-function engineEyes(eyes: EyeTune): EyeTune | null {
-  if (sameEyes(eyes, DEFAULT_EYES)) return null
-  return { left: engineSide(eyes.left), right: engineSide(eyes.right), spacing: eyes.spacing }
+  bot.setEyeTune(manual.eyes)
+  bot.setManualHold(!props.playing)
 }
 
 function clearSelection() {
@@ -107,6 +78,7 @@ watch(
     props.manual?.offset,
     props.manual?.eyes,
     props.tools,
+    props.playing,
     hero.value
   ],
   () => applyEngine(),

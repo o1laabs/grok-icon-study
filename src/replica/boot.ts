@@ -41,6 +41,7 @@ export type ReplicaPlayback = {
   remainMs: number
   held: boolean
   frozen: boolean
+  manualMix: number
 }
 
 declare global {

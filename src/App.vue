@@ -80,6 +80,7 @@ const hero = ref<{
     remainMs: number
     held: boolean
     frozen: boolean
+    manualMix: number
   } | null
 } | null>(null)
 const manual = ref<ManualState>(parseManual(lis('manuel')))
@@ -129,10 +130,11 @@ watch(expression, (id) => {
   ecris('expression', id)
   if (view.value !== 'animations') state.value = id
   if (view.value !== 'personnaliser') return
-  posePlay.value = true
-  poseStopped.value = false
   poseIdx.value = 0
   poseElapsed.value = 0
+  if (manual.value.on) return
+  posePlay.value = true
+  poseStopped.value = false
 })
 watch(
   manual,
@@ -188,11 +190,23 @@ function onSeek(t: number) {
   state.value = cycle.value.blocks[index]?.state ?? 'idle'
 }
 
-const posePlay = ref(true)
+const posePlay = ref(!manual.value.on)
 const poseStopped = ref(false)
 const poseIdx = ref(0)
 const poseElapsed = ref(0)
 const poseHold = ref(2)
+const poseMix = ref(0)
+
+watch(
+  () => manual.value.on,
+  (on) => {
+    if (view.value !== 'personnaliser') return
+    if (on) {
+      posePlay.value = false
+      pausePose()
+    }
+  }
+)
 
 function onSeekPose(index: number) {
   const frozen = !!hero.value?.playback()?.frozen
@@ -205,24 +219,32 @@ function releasePoseFreeze() {
   hero.value?.setPlaylistHold(false)
 }
 
-function applyPosePlayback() {
-  if (view.value !== 'personnaliser' || preview.value) return
-  if (posePlay.value) {
-    poseStopped.value = false
-    hero.value?.setPaused(false)
-    hero.value?.setPlaylistHold(false)
+function playPose() {
+  poseStopped.value = false
+  hero.value?.setPaused(false)
+  hero.value?.setPlaylistHold(false)
+}
+
+function pausePose(settle = false) {
+  hero.value?.setPlaylistHold(true)
+  if (manual.value.on) {
+    hero.value?.setPaused(true)
     return
   }
   hero.value?.seekEye(poseIdx.value, { snap: true })
-  hero.value?.setPlaylistHold(true)
-  hero.value?.freezeNow({ settle: poseStopped.value })
+  hero.value?.freezeNow({ settle })
+}
+
+function applyPosePlayback() {
+  if (view.value !== 'personnaliser' || preview.value) return
+  if (posePlay.value) playPose()
+  else pausePose(poseStopped.value)
 }
 
 function onStopPose() {
   poseStopped.value = true
   posePlay.value = false
-  hero.value?.setPlaylistHold(true)
-  hero.value?.freezeNow({ settle: true })
+  if (view.value === 'personnaliser') pausePose(true)
 }
 
 const gardeAnim = ref(false)
@@ -257,14 +279,8 @@ watch(preview, (on) => {
 
 watch(posePlay, (on) => {
   if (view.value !== 'personnaliser') return
-  if (on) {
-    poseStopped.value = false
-    hero.value?.setPaused(false)
-    hero.value?.setPlaylistHold(false)
-    return
-  }
-  hero.value?.setPlaylistHold(true)
-  hero.value?.freezeNow({ settle: poseStopped.value })
+  if (on) playPose()
+  else pausePose(poseStopped.value)
 })
 
 let raf = 0
@@ -279,6 +295,7 @@ function tick(ms: number) {
       poseIdx.value = snap.eyeIdx
       poseHold.value = snap.holdMs / 1000
       poseElapsed.value = Math.max(0, (snap.holdMs - snap.remainMs) / 1000)
+      if (typeof snap.manualMix === 'number') poseMix.value = snap.manualMix
     }
   }
   if (!playing.value || (view.value !== 'animations' && !preview.value)) return
@@ -527,6 +544,8 @@ onUnmounted(() => {
           :follow="follow"
           :manual="manual"
           :tools="view === 'personnaliser' && !preview"
+          :playing="posePlay"
+          :mix="poseMix"
           @ready="onHeroReady"
           @update:manual="manual = $event"
         />
