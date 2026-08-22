@@ -73,6 +73,7 @@
       this.sizePx = opts.sizePx || null;
       this.eyeColor = opts.eyeColor || null;
       this.inkFlat = opts.inkFlat || null;
+      this.inkGrad = opts.inkGrad || null;
       this.geo = opts.geo || g.GROK_GEO;
       this.playlists = opts.playlist || EYE_PLAYLIST;
 
@@ -421,20 +422,65 @@
     setColor(id, scheme) {
       this.colorId = id;
       if (scheme) this.scheme = scheme;
-      if (this.inkFlat) {
-        this.svg.style.setProperty("--fg", this.inkFlat);
-      } else if (this.loginWrap) {
-        this.svg.style.setProperty("--fg", inkFg(id));
+      if (this.inkGrad) {
+        this._paintInkGrad();
       } else {
-        const pal = this.geo.palette[id] || this.geo.palette.black;
-        this.svg.style.setProperty("--fg", this.scheme === "dark" ? pal.dark : pal.light);
+        if (this.inkFlat) {
+          this.svg.style.setProperty("--fg", this.inkFlat);
+        } else if (this.loginWrap) {
+          this.svg.style.setProperty("--fg", inkFg(id));
+        } else {
+          const pal = this.geo.palette[id] || this.geo.palette.black;
+          this.svg.style.setProperty("--fg", this.scheme === "dark" ? pal.dark : pal.light);
+        }
+        this.svg.style.setProperty("--ink", inkCss(id));
+        this.body.setAttribute("fill", "var(--fg, #000)");
       }
-      this.svg.style.setProperty("--ink", inkCss(id));
       this.svg.style.setProperty("--bg", this.eyeColor || EYE_BG);
+    }
+
+    _paintInkGrad() {
+      const spec = this.inkGrad;
+      const vb = this.geo.viewBox;
+      const cx = vb.minX + vb.width / 2;
+      const cy = vb.minY + vb.height / 2;
+      if (spec.radial) {
+        const r = (Math.hypot(vb.width, vb.height) / 2) * 0.72;
+        this.inkRadialEl.setAttribute("cx", cx);
+        this.inkRadialEl.setAttribute("cy", vb.minY + vb.height * 0.42);
+        this.inkRadialEl.setAttribute("r", r);
+        this.inkRadialStops[0].setAttribute("stop-color", spec.from);
+        this.inkRadialStops[1].setAttribute("stop-color", spec.to);
+        this.body.setAttribute("fill", `url(#${this.inkRadialId})`);
+        this.svg.style.setProperty("--fg", spec.from);
+        this.svg.style.setProperty("--ink", `radial-gradient(circle at 50% 42%, ${spec.from}, ${spec.to})`);
+        return;
+      }
+      const deg = ((Number(spec.angle) || 0) % 360 + 360) % 360;
+      const rad = (deg * Math.PI) / 180;
+      const span = Math.hypot(vb.width, vb.height) / 2;
+      const dx = Math.sin(rad) * span;
+      const dy = -Math.cos(rad) * span;
+      this.inkGradEl.setAttribute("x1", cx - dx);
+      this.inkGradEl.setAttribute("y1", cy - dy);
+      this.inkGradEl.setAttribute("x2", cx + dx);
+      this.inkGradEl.setAttribute("y2", cy + dy);
+      this.inkStops[0].setAttribute("stop-color", spec.from);
+      this.inkStops[1].setAttribute("stop-color", spec.to);
+      this.body.setAttribute("fill", `url(#${this.inkGradId})`);
+      this.svg.style.setProperty("--fg", spec.from);
+      this.svg.style.setProperty("--ink", `linear-gradient(${deg}deg, ${spec.from}, ${spec.to})`);
     }
 
     setInk(flat) {
       this.inkFlat = flat || null;
+      if (this.inkFlat) this.inkGrad = null;
+      this.setColor(this.colorId);
+    }
+
+    setInkGrad(grad) {
+      this.inkGrad = grad ? { ...grad } : null;
+      if (this.inkGrad) this.inkFlat = null;
       this.setColor(this.colorId);
     }
 
@@ -738,6 +784,28 @@
       this.clipPath = document.createElementNS(ns, "path");
       clip.appendChild(this.clipPath);
       defs.appendChild(clip);
+      this.inkGradId = `grok-ink-${Math.random().toString(36).slice(2, 8)}`;
+      this.inkGradEl = document.createElementNS(ns, "linearGradient");
+      this.inkGradEl.setAttribute("id", this.inkGradId);
+      this.inkGradEl.setAttribute("gradientUnits", "userSpaceOnUse");
+      this.inkStops = [0, 1].map((offset) => {
+        const s = document.createElementNS(ns, "stop");
+        s.setAttribute("offset", String(offset));
+        this.inkGradEl.appendChild(s);
+        return s;
+      });
+      defs.appendChild(this.inkGradEl);
+      this.inkRadialId = `grok-ink-r-${Math.random().toString(36).slice(2, 8)}`;
+      this.inkRadialEl = document.createElementNS(ns, "radialGradient");
+      this.inkRadialEl.setAttribute("id", this.inkRadialId);
+      this.inkRadialEl.setAttribute("gradientUnits", "userSpaceOnUse");
+      this.inkRadialStops = [0, 1].map((offset) => {
+        const s = document.createElementNS(ns, "stop");
+        s.setAttribute("offset", String(offset));
+        this.inkRadialEl.appendChild(s);
+        return s;
+      });
+      defs.appendChild(this.inkRadialEl);
       this.svg.appendChild(defs);
 
       this.group = document.createElementNS(ns, "g");
@@ -1318,12 +1386,21 @@
         manualMix: 0,
       });
       if (holdMix > 0.002) {
+        // Eye-sphere rim = visible head half-width in overlay units, so the
+        // fold/slice lands on the silhouette like the original lab.
+        let rim = 95;
+        if (restRing) {
+          let hw = 0;
+          for (const p of restRing) hw = Math.max(hw, Math.abs(p[0] - R));
+          rim = (hw * 300) / (R * 3.16);
+        }
         EY.blendCustomEyes({
           eyeEls: this.eyeEls,
           pose: this._poseNow(),
           eyes: this.eyeTune,
           svg: this.svg,
           mix: holdMix,
+          rim,
         });
       }
 

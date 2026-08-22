@@ -17,6 +17,7 @@ const props = withDefaults(
     tools?: boolean
     playing?: boolean
     mix?: number
+    echelle?: number
   }>(),
   {
     size: 440,
@@ -28,7 +29,8 @@ const props = withDefaults(
     manual: null,
     tools: false,
     playing: false,
-    mix: 0
+    mix: 0,
+    echelle: 1
   }
 )
 
@@ -130,6 +132,7 @@ defineExpose({
       :manual="manual"
       :hero="liveHero"
       :shape="shape"
+      :echelle="echelle"
       @update:pose="(pose: HeadPose) => patch({ pose })"
       @update:selected="(selected: ManualPart | null) => patch({ selected })"
       @update:eyes="(eyes: EyeTune) => patch({ eyes })"

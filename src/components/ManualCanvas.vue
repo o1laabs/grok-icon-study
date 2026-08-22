@@ -46,11 +46,15 @@ export type HeroHandle = {
   } | null
 }
 
-const props = defineProps<{
-  manual: ManualState
-  hero: HeroHandle | null
-  shape?: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    manual: ManualState
+    hero: HeroHandle | null
+    shape?: string
+    echelle?: number
+  }>(),
+  { echelle: 1 }
+)
 
 const emit = defineEmits<{
   'update:pose': [HeadPose]
@@ -79,6 +83,7 @@ const rings = computed(() => {
 
 const activeAxis = ref<'x' | 'y' | 'z' | 'view' | null>(null)
 let wireGroup: SVGGElement | null = null
+const eyeShown: Record<'left' | 'right', boolean | null> = { left: null, right: null }
 
 type EyeHandle = 'width' | 'height' | 'size' | 'spacing' | 'rotate'
 
@@ -165,15 +170,20 @@ const syncOverlay = () => {
   const host = sceneSvg()
   const layer = manualLayer.value
   if (!host || !layer) return
+  /*
+   * Les rects ecran incluent l'echelle photo du sujet ; l'overlay vit
+   * lui-meme dans le sujet mis a l'echelle — diviser par `echelle` rend
+   * sa boite CSS pre-transform, sinon la geometry serait comptee deux fois.
+   */
   const hostBox = host.getBoundingClientRect()
   const layerBox = layer.getBoundingClientRect()
   overlayStyle.value = {
-    left: `${(hostBox.left - layerBox.left).toFixed(2)}px`,
-    top: `${(hostBox.top - layerBox.top).toFixed(2)}px`,
+    left: `${((hostBox.left - layerBox.left) / props.echelle).toFixed(2)}px`,
+    top: `${((hostBox.top - layerBox.top) / props.echelle).toFixed(2)}px`,
     right: 'auto',
     bottom: 'auto',
-    width: `${hostBox.width.toFixed(2)}px`,
-    height: `${hostBox.height.toFixed(2)}px`
+    width: `${(hostBox.width / props.echelle).toFixed(2)}px`,
+    height: `${(hostBox.height / props.echelle).toFixed(2)}px`
   }
 }
 
@@ -228,6 +238,13 @@ const readEye = (tune: EyeSide, side: 'left' | 'right'): EyeFrame => {
     project(localX, localY)
   )
   const center = xy(project(0, 0))
+  // Same visibility hysteresis as the engine eyes: drag jitter around the
+  // silhouette boundary must not pop the editor handles in and out.
+  const zAvg = outline.reduce((sum, point) => sum + point[2], 0) / Math.max(outline.length, 1)
+  let shown = eyeShown[side] ?? zAvg > 0
+  if (shown && zAvg < -0.006) shown = false
+  if (!shown && zAvg > 0.004) shown = true
+  eyeShown[side] = shown
   const widthHandle = xy(project(width / 2 + 9, 0))
   const heightHandle = xy(project(0, -height / 2 - 9))
   const rotateHandle = xy(project(0, -height / 2 - 30))
@@ -235,7 +252,7 @@ const readEye = (tune: EyeSide, side: 'left' | 'right'): EyeFrame => {
   const plusX = Math.hypot(widthHandle[0] - center[0], widthHandle[1] - center[1])
   const minusY = -Math.hypot(heightHandle[0] - center[0], heightHandle[1] - center[1])
   return {
-    visible: outline.reduce((sum, point) => sum + point[2], 0) > 0,
+    visible: shown,
     available: true,
     center,
     widthAxis: unitVector(center, widthHandle),

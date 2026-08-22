@@ -5,6 +5,7 @@ import {
   type ReplicaParts,
   type ReplicaPlayback
 } from './boot'
+import { parseInk } from './catalog'
 
 export type ReplicaMount = {
   apply: (input: ReplicaInput) => void
@@ -40,6 +41,20 @@ export type ReplicaInput = {
 const TILE_MAX = 6
 let tileActive = 0
 const tileWait: Array<() => void> = []
+
+function appliqueEncre(bot: ReplicaBot, v: string) {
+  const spec = parseInk(v)
+  if (spec.kind === 'preset') {
+    bot.setInk(null)
+    bot.setColor(spec.id)
+  } else if (spec.kind === 'flat') {
+    bot.setInk(spec.hex)
+  } else if (spec.kind === 'radial') {
+    bot.setInkGrad({ from: spec.from, to: spec.to, angle: 0, radial: true })
+  } else {
+    bot.setInkGrad({ from: spec.from, to: spec.to, angle: spec.angle })
+  }
+}
 
 function lockTile(): Promise<void> {
   if (tileActive < TILE_MAX) {
@@ -82,10 +97,18 @@ export async function mountReplica(
   if (!ok || !window.GrokCharacter) return null
   const Re = window.GROK_GEO?.Re ?? 114.27
   const driven = !!extra?.driven
+  const spec = parseInk(input.color)
   const bot: ReplicaBot = new window.GrokCharacter(svg, {
     state: input.state,
     shape: input.shape,
-    color: input.color,
+    color: spec.kind === 'preset' ? spec.id : 'black',
+    inkFlat: spec.kind === 'flat' ? spec.hex : undefined,
+    inkGrad:
+      spec.kind === 'grad'
+        ? { from: spec.from, to: spec.to, angle: spec.angle }
+        : spec.kind === 'radial'
+          ? { from: spec.from, to: spec.to, angle: 0, radial: true }
+          : undefined,
     sizePx: input.size,
     mode: 'hold',
     loginWrap: true,
@@ -127,7 +150,7 @@ export async function mountReplica(
     apply(next) {
       if (next.state !== last.state) bot.setState(next.state, { resetEyes: false })
       if (next.shape !== last.shape) bot.setShape(next.shape)
-      if (next.color !== last.color) bot.setColor(next.color)
+      if (next.color !== last.color) appliqueEncre(bot, next.color)
       if (next.follow !== last.follow) bot.setFollowPointer(next.follow)
       if (next.paper !== last.paper) bot.setEyeColor(next.paper)
       if (next.size !== last.size) bot.setSize(next.size)

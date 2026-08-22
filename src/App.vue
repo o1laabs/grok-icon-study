@@ -7,6 +7,8 @@ import CycleDialog from '@/components/CycleDialog.vue'
 import ExportBar from '@/components/ExportBar.vue'
 import GifDialog from '@/components/GifDialog.vue'
 import AvatarStage from '@/components/AvatarStage.vue'
+import PhotoFrame from '@/components/PhotoFrame.vue'
+import PhotoPanel from '@/components/PhotoPanel.vue'
 import Settings from '@/components/Settings.vue'
 import SideRail, { type ViewId } from '@/components/SideRail.vue'
 import Timeline from '@/components/Timeline.vue'
@@ -47,11 +49,19 @@ import {
   cyclePas,
   nomFichier,
   tailleAction,
+  viewBoxExport,
   type ActionId,
   type EtatExport,
   type FondGif,
   type FormatCycle
 } from '@/ui/export'
+import {
+  ANGLE_DEFAUT,
+  COMPOSITION_DEFAUT,
+  svgPhoto,
+  type CompositionPhoto,
+  type FondPhoto
+} from '@/ui/photo'
 import { parseManual, persistable, type ManualState } from '@/ui/pose/model'
 import { ecris, lis } from '@/ui/stockage'
 
@@ -61,6 +71,7 @@ const ready = ref(false)
 const savedShape = lis('forme')
 const shape = ref(savedShape && estForme(savedShape) ? savedShape : DEFAULT_SHAPE)
 const color = ref(lis('couleur') || DEFAULT_COLOR)
+const oeil = ref(lis('oeil') || '')
 const expression = ref(lis('expression') || DEFAULT_EXPRESSION)
 const intro = ref(true)
 const hero = ref<{
@@ -85,6 +96,20 @@ const hero = ref<{
 } | null>(null)
 const manual = ref<ManualState>(parseManual(lis('manuel')))
 
+/* ---- mode photo : cadrage, fond et capture de l'avatar fige ---- */
+const photo = ref(false)
+const photoOutil = ref<'cadre' | 'pose'>('cadre')
+const photoComposition = ref<CompositionPhoto>({ ...COMPOSITION_DEFAUT, cornerRadius: 18 })
+const photoFond = ref<FondPhoto>('transparent')
+const photoCouleurDe = ref('#F5F7FC')
+const photoCouleurA = ref('#C9D5FF')
+const photoAngle = ref(ANGLE_DEFAUT)
+const photoFormat = ref<'png' | 'svg'>('png')
+const photoTaille = ref(1024)
+const photoFlash = ref(0)
+const photoAvantJoue = ref(true)
+let minuteurPhoto: ReturnType<typeof setTimeout> | undefined
+
 const restored = parseCycles(lis('cycles'))
 const cycles = ref<Cycle[]>(restored.length ? restored : [defaultCycle()])
 const activeId = ref(
@@ -103,18 +128,23 @@ const state = ref(intro.value ? 'idle' : (cycle.value.blocks[block.value]?.state
 
 const gauche = computed(() => view.value === 'reglages' && !preview.value)
 const droite = computed(() => view.value !== 'reglages' && !preview.value && !intro.value)
+const plein = computed(() => preview.value || photo.value)
 const follow = computed(() => view.value === 'reglages' && !preview.value)
 const nue = computed(() => intro.value && !preview.value)
 const playedState = computed(() => {
+  if (photo.value) return expression.value
   if (view.value === 'animations' || preview.value) return state.value
   return expression.value
 })
 const avatarSize = computed(() => {
+  if (photo.value) return 460
   if (preview.value) return 560
   if (view.value === 'personnaliser') return 580
   return 440
 })
 const avatarMax = computed(() => {
+  if (photo.value)
+    return 'max-w-[min(460px,68vw,calc(100dvh_-_14rem))] max-lg:max-w-[calc(54dvh_-_12.5rem)]'
   if (preview.value) return 'max-w-[min(560px,calc(100dvh_-_6rem))]'
   if (view.value === 'personnaliser')
     return 'max-w-[min(600px,calc(100dvh_-_var(--timeline)_-_7rem))]'
@@ -126,8 +156,17 @@ watch(shape, (id) => {
   if (manual.value.selected) manual.value = { ...manual.value, selected: null }
 })
 watch(color, (id) => ecris('couleur', id))
+watch(oeil, (v) => ecris('oeil', v))
 watch(expression, (id) => {
   ecris('expression', id)
+  if (photo.value) {
+    // en photo, l'avatar est fige : on libere le temps de la transition
+    // spring vers la nouvelle expression, puis on regele.
+    hero.value?.setPaused(false)
+    clearTimeout(minuteurPhoto)
+    minuteurPhoto = setTimeout(() => hero.value?.freezeNow({ settle: true }), 700)
+    return
+  }
   if (view.value !== 'animations') state.value = id
   if (view.value !== 'personnaliser') return
   poseIdx.value = 0
@@ -203,7 +242,13 @@ watch(
     if (view.value !== 'personnaliser') return
     if (on) {
       posePlay.value = false
+      // en photo, l'entree a gele le moteur : le degeler pour que le
+      // ressort manualMix reparte et laisse apparaitre les gizmos.
+      if (photo.value) hero.value?.setPaused(false)
       pausePose()
+    } else {
+      posePlay.value = true
+      releasePoseFreeze()
     }
   }
 )
@@ -247,10 +292,95 @@ function onStopPose() {
   if (view.value === 'personnaliser') pausePose(true)
 }
 
+function ouvrePhoto() {
+  if (!hero.value || intro.value || preview.value) return
+  // fige l'instant present : l'expression affichee devient la pose photo.
+  expression.value = playedState.value
+  photoOutil.value = 'cadre'
+  photoAvantJoue.value = posePlay.value
+  posePlay.value = false
+  poseStopped.value = false
+  pausePose(true)
+  photo.value = true
+}
+
+function fermePhoto() {
+  photo.value = false
+  clearTimeout(minuteurPhoto)
+  photoFlash.value = 0
+  hero.value?.setPaused(false)
+  posePlay.value = photoAvantJoue.value && !manual.value.on
+  void nextTick(applyPosePlayback)
+}
+
+function recadrePhoto() {
+  photoComposition.value = {
+    ...COMPOSITION_DEFAUT,
+    cornerRadius: photoComposition.value.cornerRadius
+  }
+}
+
+function choisitOutil(outil: 'cadre' | 'pose') {
+  photoOutil.value = outil
+  if (outil === 'pose' && !manual.value.on) {
+    manual.value = { ...manual.value, on: true, selected: manual.value.selected ?? 'body' }
+  }
+}
+
+/**
+ * Choisir une expression quitte le reglage manuel (la pose revient a
+ * l'expression) puis enchaine la transition — meme si l'expression cliquee
+ * est celle d'origine, la grille n'affichant aucune selection en manuel.
+ */
+function choisitExpression(id: string) {
+  if (manual.value.on) manual.value = { ...manual.value, on: false, selected: null }
+  if (id === expression.value) {
+    hero.value?.setPaused(false)
+    clearTimeout(minuteurPhoto)
+    minuteurPhoto = setTimeout(() => hero.value?.freezeNow({ settle: true }), 700)
+    return
+  }
+  expression.value = id
+}
+
+async function prendPhoto() {
+  const svg = hero.value?.svg()
+  if (!svg || !photo.value || etatExport.value === 'occupe') return
+  clearTimeout(minuteurPhoto)
+  hero.value?.freezeNow({ settle: true })
+  photoFlash.value++
+  clearTimeout(confirmation)
+  etatExport.value = 'occupe'
+  try {
+    // le viewBox vivant du moment : c'est lui que le cadre affiche.
+    const vue = svg.getAttribute('viewBox') || viewBoxExport()
+    const markup = svgAutonome(svg, 300, vue)
+    const complet = svgPhoto(markup, {
+      fond: photoFond.value,
+      couleurDe: photoCouleurDe.value,
+      couleurA: photoCouleurA.value,
+      angle: photoAngle.value,
+      taille: photoTaille.value,
+      composition: photoComposition.value
+    })
+    const nom = nomFichier(shape.value, expression.value, color.value, photoFormat.value, 'photo')
+    const fichier =
+      photoFormat.value === 'svg'
+        ? new Blob([complet], { type: 'image/svg+xml' })
+        : await versPng(complet, photoTaille.value)
+    telecharge(fichier, nom)
+    etatExport.value = 'exporte'
+  } catch {
+    etatExport.value = 'erreur'
+  }
+  confirmation = setTimeout(() => (etatExport.value = 'pret'), CONFIRMATION_MS)
+}
+
 const gardeAnim = ref(false)
 
 watch(view, (now, prev) => {
   intro.value = false
+  if (photo.value) fermePhoto()
   if (prev === 'personnaliser' && now !== 'personnaliser') releasePoseFreeze()
   if (now === 'animations') {
     gardeAnim.value = true
@@ -313,9 +443,12 @@ function tick(ms: number) {
 }
 
 function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape') preview.value = false
+  if (e.key === 'Escape') {
+    if (photo.value) fermePhoto()
+    else preview.value = false
+  }
   if (e.code !== 'Space') return
-  if (view.value !== 'animations' && !preview.value) return
+  if (view.value !== 'animations' && !preview.value && !photo.value) return
   if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return
   const node = e.target
   if (
@@ -360,7 +493,12 @@ async function exporteCycle() {
   const images = cycleImages(totalDuration(blocs), format)
   const pas = cyclePas(format)
   const taille = CYCLE_TAILLE[format]
-  const reglages = { shape: shape.value, color: color.value, expression: expression.value }
+  const reglages = {
+    shape: shape.value,
+    color: color.value,
+    oeil: oeil.value || undefined,
+    expression: expression.value
+  }
   const suit = (fait: number, total: number) => (avancementCycle.value = fait / total)
   avancementCycle.value = 0
   try {
@@ -423,11 +561,21 @@ async function exporte(id: ActionId, confirme = false) {
     nomFichier(shape.value, expression.value, color.value, action.extension, action.suffixe)
   try {
     if (action.mode === 'anime') {
-      const reglages = { shape: shape.value, color: color.value, expression: expression.value }
+      const reglages = {
+    shape: shape.value,
+    color: color.value,
+    oeil: oeil.value || undefined,
+    expression: expression.value
+  }
       telecharge(await versSvgAnime(reglages, cote, ANIM_IMAGES, ANIM_PAS), nom())
       etatExport.value = 'exporte'
     } else if (action.mode === 'gif') {
-      const reglages = { shape: shape.value, color: color.value, expression: expression.value }
+      const reglages = {
+    shape: shape.value,
+    color: color.value,
+    oeil: oeil.value || undefined,
+    expression: expression.value
+  }
       telecharge(
         await versGifAnime(reglages, action.taille, GIF_IMAGES, GIF_PAS, couleurDeFond(fondGif.value)),
         nom()
@@ -482,6 +630,7 @@ onUnmounted(() => {
   clearTimeout(pending)
   clearTimeout(minuteurBarre)
   clearTimeout(confirmation)
+  clearTimeout(minuteurPhoto)
   annuleCycle()
 })
 </script>
@@ -491,7 +640,17 @@ onUnmounted(() => {
   <SideRail v-if="!preview" v-model="view" class="rail" :inert="nue || undefined" />
 
   <button
-    v-if="preview"
+    v-if="photo"
+    type="button"
+    class="photo-sortie fixed top-4 right-4 z-30 flex cursor-pointer items-center gap-1.5 rounded-full border border-[var(--line)] bg-white/90 px-3 py-1.5 text-xs text-[var(--muted)] shadow-sm backdrop-blur transition hover:text-[var(--ink)] lg:right-[calc(21.25rem+1rem)]"
+    @click="fermePhoto"
+  >
+    {{ t('photo.exit') }}
+    <kbd class="rounded bg-black/5 px-1 py-0.5 text-[10px]">{{ t('preview.key') }}</kbd>
+  </button>
+
+  <button
+    v-else-if="preview"
     type="button"
     class="fixed top-5 right-5 z-30 flex cursor-pointer items-center gap-1.5 rounded-lg bg-white/80 px-2.5 py-1.5 text-xs text-[var(--muted)] shadow-sm backdrop-blur transition hover:text-[var(--ink)]"
     @click="preview = false"
@@ -500,17 +659,40 @@ onUnmounted(() => {
     <kbd class="rounded bg-black/5 px-1 py-0.5 text-[10px]">{{ t('preview.key') }}</kbd>
   </button>
 
+  <aside
+    v-if="photo"
+    class="photo-panneau fixed top-0 right-0 z-20 flex h-dvh w-[21.25rem] flex-col gap-3 overflow-y-auto border-l border-[var(--line)] bg-[var(--paper)] p-4 max-lg:inset-x-0 max-lg:top-auto max-lg:bottom-0 max-lg:h-[46dvh] max-lg:w-auto max-lg:rounded-t-2xl max-lg:border-t"
+  >
+    <PhotoPanel
+      v-model:composition="photoComposition"
+      v-model:fond="photoFond"
+      v-model:couleur-de="photoCouleurDe"
+      v-model:couleur-a="photoCouleurA"
+      v-model:angle="photoAngle"
+      :expression="expression"
+      v-model:format="photoFormat"
+      v-model:taille="photoTaille"
+      v-model:shape="shape"
+      v-model:color="color"
+      v-model:manual="manual"
+      :manuel="manual.on"
+      :active="true"
+      @update:expression="choisitExpression"
+    />
+  </aside>
+
   <div
     class="scene min-h-full items-stretch justify-center p-8 lg:pr-3 max-lg:flex max-lg:flex-col max-lg:gap-10 max-lg:px-5"
     :class="[
-      !preview && 'scene--timeline lg:pb-[calc(var(--timeline)_+_1rem)]',
-      !preview && view === 'animations' && 'pb-[calc(var(--timeline)_+_1rem)]',
-      !preview && 'max-lg:pt-20',
-      nue || preview ? 'scene--seule' : view === 'reglages' && 'scene--gauche'
+      !plein && 'scene--timeline lg:pb-[calc(var(--timeline)_+_1rem)]',
+      !plein && view === 'animations' && 'pb-[calc(var(--timeline)_+_1rem)]',
+      !preview && !photo && 'max-lg:pt-20',
+      photo && 'max-lg:pt-40 max-lg:pb-[46dvh]',
+      nue || preview ? 'scene--seule' : photo ? 'scene--photo' : view === 'reglages' && 'scene--gauche'
     ]"
   >
     <aside
-      v-if="!preview"
+      v-if="!plein"
       class="panneau scene__gauche w-full lg:flex lg:h-[calc(100dvh_-_3rem_-_var(--timeline))] lg:w-80 lg:shrink-0 lg:flex-col lg:justify-center lg:self-start lg:-translate-y-12 lg:pl-14"
       :class="gauche ? 'panneau--ouvert max-lg:order-2' : 'max-lg:hidden'"
     >
@@ -520,7 +702,7 @@ onUnmounted(() => {
     <main
       class="scene__avatar relative flex flex-1 items-center justify-center max-lg:order-1 max-lg:flex-col max-lg:gap-4 lg:self-start"
       :class="
-        preview
+        plein
           ? 'lg:min-h-[calc(100dvh_-_4rem)]'
           : 'lg:min-h-[calc(100dvh_-_3rem_-_var(--timeline))]'
       "
@@ -530,38 +712,108 @@ onUnmounted(() => {
         :class="[
           avatarMax,
           nue && 'avatar--intro',
-          view === 'reglages' && !preview && 'avatar--geant',
-          view === 'personnaliser' && !preview && !nue && 'avatar--bas'
+          view === 'reglages' && !plein && 'avatar--geant',
+          view === 'personnaliser' && !plein && !nue && 'avatar--bas'
         ]"
       >
-        <AvatarStage
-          ref="hero"
-          class="h-auto max-w-full"
-          :size="avatarSize"
-          :shape="shape"
-          :color="color"
-          :state="playedState"
-          :follow="follow"
-          :manual="manual"
-          :tools="view === 'personnaliser' && !preview"
-          :playing="posePlay"
-          :mix="poseMix"
-          @ready="onHeroReady"
-          @update:manual="manual = $event"
-        />
+        <PhotoFrame
+          v-model:composition="photoComposition"
+          :active="photo"
+          :fond="photoFond"
+          :couleur-de="photoCouleurDe"
+          :couleur-a="photoCouleurA"
+          :angle="photoAngle"
+          :outil="photoOutil"
+          :flash="photoFlash"
+        >
+          <AvatarStage
+            ref="hero"
+            class="h-auto max-w-full"
+            :size="avatarSize"
+            :shape="shape"
+            :color="color"
+            :paper="oeil || '#f9f9f9'"
+            :state="playedState"
+            :follow="follow"
+            :manual="manual"
+            :tools="(view === 'personnaliser' && !preview && !photo) || photo"
+            :echelle="photo ? photoComposition.scale : 1"
+            :playing="posePlay"
+            :mix="poseMix"
+            @ready="onHeroReady"
+            @update:manual="manual = $event"
+          />
+        </PhotoFrame>
       </div>
 
       <div
-        v-if="view === 'personnaliser' && !preview"
-        class="barre-export flex justify-center"
+        v-if="photo"
+        class="photo-barres absolute inset-x-0 bottom-6 z-30 flex flex-col items-center gap-3 max-lg:fixed max-lg:bottom-auto max-lg:top-20 max-lg:left-1/2 max-lg:-translate-x-1/2 max-lg:scale-90"
+      >
+        <div class="photo-outils flex items-center gap-1 rounded-full bg-white/90 p-1 shadow-sm backdrop-blur">
+          <button
+            v-for="outil in ['cadre', 'pose'] as const"
+            :key="outil"
+            type="button"
+            class="cursor-pointer rounded-full px-3 py-1.5 text-xs transition"
+            :class="
+              photoOutil === outil
+                ? 'bg-[var(--ink)] font-medium text-[var(--paper)]'
+                : 'text-[var(--muted)] hover:text-[var(--ink)]'
+            "
+            :aria-pressed="photoOutil === outil"
+            @click="choisitOutil(outil)"
+          >
+            {{ t(outil === 'cadre' ? 'photo.toolFrame' : 'photo.toolPose') }}
+          </button>
+          <button
+            type="button"
+            class="cursor-pointer rounded-full px-3 py-1.5 text-xs text-[var(--muted)] transition hover:text-[var(--ink)]"
+            @click="recadrePhoto"
+          >
+            {{ t('photo.reset') }}
+          </button>
+        </div>
+        <button
+          type="button"
+          class="photo-declencheur flex cursor-pointer items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold shadow-lg transition"
+          :class="etatExport === 'occupe' && 'occupe'"
+          :disabled="etatExport === 'occupe'"
+          @click="prendPhoto"
+        >
+          <span class="photo-obturateur" aria-hidden="true" />
+          <span>{{
+            etatExport === 'exporte'
+              ? t('export.done')
+              : etatExport === 'erreur'
+                ? t('export.failed')
+                : t('photo.take')
+          }}</span>
+          <span class="rounded-full bg-black/15 px-1.5 py-0.5 text-[10px] font-medium uppercase">
+            {{ photoFormat }}
+          </span>
+        </button>
+      </div>
+
+      <div
+        v-if="view === 'personnaliser' && !plein"
+        class="barre-export flex justify-center gap-2"
         :class="(nue || barreCachee) && 'barre-export--cachee'"
         :inert="nue || barreCachee || undefined"
       >
+        <button
+          type="button"
+          class="photo-entree flex cursor-pointer items-center gap-1.5 rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm text-[var(--muted)] shadow-sm transition hover:border-[var(--muted)] hover:text-[var(--ink)]"
+          @click="ouvrePhoto"
+        >
+          <span class="photo-obturateur photo-obturateur--petit" aria-hidden="true" />
+          {{ t('photo.open') }}
+        </button>
         <ExportBar :etat="etatExport" @exporter="exporte" />
       </div>
 
       <CycleDialog
-        v-if="view === 'animations' && !preview"
+        v-if="view === 'animations' && !plein"
         v-model:open="dialogueCycle"
         v-model:format="formatCycle"
         v-model:fond="fondCycle"
@@ -572,7 +824,7 @@ onUnmounted(() => {
       />
 
       <GifDialog
-        v-if="view === 'personnaliser' && !preview"
+        v-if="view === 'personnaliser' && !plein"
         v-model:open="dialogueGif"
         v-model:fond="fondGif"
         @confirm="exporte('gif', true)"
@@ -580,7 +832,7 @@ onUnmounted(() => {
     </main>
 
     <aside
-      v-if="!preview"
+      v-if="!plein"
       class="panneau scene__droite w-full lg:w-[21.25rem] lg:shrink-0"
       :class="[
         droite ? 'panneau--ouvert max-lg:order-2' : 'max-lg:hidden',
@@ -592,6 +844,7 @@ onUnmounted(() => {
         class="playback-pad"
         v-model:shape="shape"
         v-model:color="color"
+        v-model:oeil="oeil"
         v-model:expression="expression"
         v-model:manual="manual"
         :ready="ready"
@@ -626,7 +879,7 @@ onUnmounted(() => {
   </div>
 
   <Timeline
-    v-if="view === 'animations' && !preview"
+    v-if="view === 'animations' && !plein"
     v-model:cycles="cycles"
     v-model:active-id="activeId"
     v-model:block="block"
@@ -640,5 +893,5 @@ onUnmounted(() => {
     @exporter="dialogueCycle = true"
   />
 
-  <p v-if="view === 'reglages' && !preview" class="wordmark" aria-hidden="true">STUDY</p>
+  <p v-if="view === 'reglages' && !plein" class="wordmark" aria-hidden="true">STUDY</p>
 </template>

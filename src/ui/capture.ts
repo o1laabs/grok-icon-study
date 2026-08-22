@@ -123,6 +123,7 @@ export type Avancement = (fait: number, total: number) => void
 export interface ReglagesBot {
   shape: string
   color: string
+  oeil?: string
   expression: string
   state?: string
 }
@@ -133,7 +134,7 @@ function inputOf(reglages: ReglagesBot, taille: number, paper?: string): Replica
     shape: reglages.shape,
     color: reglages.color,
     follow: false,
-    paper: paper ?? '#f9f9f9',
+    paper: paper ?? reglages.oeil ?? '#f9f9f9',
     size: taille
   }
 }

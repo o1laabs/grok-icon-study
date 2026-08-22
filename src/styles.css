@@ -410,6 +410,15 @@ html::-webkit-scrollbar {
   }
 
   /*
+   * En mode photo : la troisieme colonne reste reservee au panneau fixe a
+   * droite, l'avatar se centre donc dans ce qui reste, comme sur la vue
+   * personnaliser — et le rail reste visible a gauche.
+   */
+  .scene--photo {
+    grid-template-columns: 0 minmax(0, 1fr) 21.25rem;
+  }
+
+  /*
    * La boule dans les reglages : elle grandit jusqu'a sortir de l'ecran par la
    * droite, et descend assez pour degager le haut de la page : sans cet air
    * au-dessus d'elle, la vue se lit comme une image tronquee et non comme un
@@ -656,6 +665,16 @@ html::-webkit-scrollbar {
   .dialogue::backdrop {
     transition: none;
     animation: none;
+  }
+
+  .teinte-cadran,
+  .teinte-oeil-blanc {
+    transition: none;
+  }
+
+  .teinte-cadran:hover,
+  .teinte-oeil:hover .teinte-oeil-blanc {
+    transform: none;
   }
 }
 
@@ -975,6 +994,450 @@ body {
 
 .axis-key i.z {
   background: #3b63d4;
+}
+
+
+
+/* ------------------------------------------------------------------ */
+/* Mode photo : panneau de reglages                                    */
+/* ------------------------------------------------------------------ */
+
+.photo-panneau input[type='number'] {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: white;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.75rem;
+  color: var(--ink);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.photo-panneau input[type='number']:focus {
+  outline: none;
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px rgb(23 32 58 / 0.08);
+}
+
+/* Les fleches natives debordent de champs si bas : on garde le clavier. */
+.photo-panneau input[type='number']::-webkit-outer-spin-button,
+.photo-panneau input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.photo-panneau input[type='number'] {
+  appearance: textfield;
+}
+
+.photo-etiquette {
+  font-size: 0.625rem;
+  line-height: 1.2;
+  color: var(--muted);
+}
+
+.photo-champ {
+  display: block;
+  min-width: 0;
+}
+
+.photo-bouton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  border: none;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  background: rgb(23 32 58 / 0.05);
+  transition:
+    color 120ms ease,
+    background 120ms ease;
+}
+
+.photo-bouton:hover {
+  color: var(--ink);
+  background: rgb(23 32 58 / 0.08);
+}
+
+.photo-bouton[aria-pressed='true'] {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.photo-bouton:focus-visible,
+.photo-lien:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+/* Bascule « liaison » entre les deux yeux : icone de chaine, pleine si liee. */
+.photo-lien {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: white;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease,
+    background 120ms ease;
+}
+
+.photo-lien:hover {
+  border-color: var(--muted);
+  color: var(--ink);
+}
+
+.photo-lien[aria-pressed='true'] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: white;
+}
+
+/*
+ * Puces sur la barre de couleur. L'input natif, invisible, ouvre le
+ * selecteur systeme.
+ */
+
+.photo-puce {
+  position: absolute;
+  top: 50%;
+  left: 7px;
+  width: 1.375rem;
+  height: 1.375rem;
+  transform: translateY(-50%);
+  border-radius: 9999px;
+  cursor: pointer;
+  box-shadow:
+    0 0 0 2px white,
+    0 1px 3px rgb(23 32 58 / 0.3);
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.photo-puce:hover {
+  transform: translateY(-50%) scale(1.12);
+}
+
+/*
+ * Le contour d'encre ne se voit qu'au clavier : au clic, l'input garde le
+ * focus pendant que le selecteur systeme est ouvert et le cadre trainerait.
+ */
+.photo-puce:has(input:focus-visible) {
+  box-shadow:
+    0 0 0 2px white,
+    0 0 0 4px var(--ink);
+}
+
+.photo-puce--fin {
+  left: auto;
+  right: 7px;
+}
+
+.photo-puce--coeur {
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.photo-puce--coeur:hover {
+  transform: translate(-50%, -50%) scale(1.12);
+}
+
+.photo-puce input[type='color'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ */
+/* Mode photo : cadre vivant, obturateur, flash                        */
+/* ------------------------------------------------------------------ */
+
+/*
+ * L'hote reste TOUJOURS dans l'arbre (display:contents quand inactif) :
+ * le slot contient l'AvatarStage du heros, jamais reparente.
+ */
+.photo-cadre-hote {
+  display: contents;
+}
+
+.photo-cadre {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--photo-coins, 0%);
+  background: white;
+  box-shadow:
+    0 0 0 1px rgb(23 32 58 / 12%),
+    0 24px 60px rgb(23 32 58 / 16%);
+  transition:
+    border-radius 180ms cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.photo-cadre.est-transparent {
+  background-color: white;
+  background-image:
+    linear-gradient(45deg, #e7e9ee 25%, transparent 25%),
+    linear-gradient(-45deg, #e7e9ee 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e7e9ee 75%),
+    linear-gradient(-45deg, transparent 75%, #e7e9ee 75%);
+  background-position:
+    0 0,
+    0 10px,
+    10px -10px,
+    -10px 0;
+  background-size: 20px 20px;
+}
+
+.photo-sujet {
+  display: contents;
+}
+
+.photo-cadre .photo-sujet {
+  position: absolute;
+  inset: 0;
+  display: block;
+  transform-origin: center;
+  will-change: transform;
+}
+
+/* En outil cadrage, la couche d'interaction couvre les gizmos manuels. */
+.photo-cadre.est-cadre .manual-layer {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/*
+ * Zoom photo : le decor de reglage garde sa taille a l'ecran. Le sujet est
+ * mis a l'echelle par `.photo-sujet` ; les poignees sont contrées par
+ * 1 / echelle autour de leur propre centre, les traits hors des groupes
+ * contrés sont amincis d'autant.
+ */
+.photo-cadre .editor-control {
+  transform: scale(calc(1 / var(--photo-echelle, 1)));
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.photo-cadre .editor-guide {
+  stroke-width: calc(1.15px / var(--photo-echelle, 1));
+  stroke-dasharray: calc(3px / var(--photo-echelle, 1)) calc(3px / var(--photo-echelle, 1));
+}
+
+.photo-cadre .selection-outline {
+  stroke-width: calc(2.4px / var(--photo-echelle, 1));
+}
+
+.photo-cadre .gizmo-cluster {
+  transform: scale(calc(1 / var(--photo-echelle, 1)));
+  transform-origin: top right;
+}
+
+.photo-cadre .axis-key {
+  transform: scale(calc(1 / var(--photo-echelle, 1)));
+  transform-origin: bottom right;
+}
+
+.photo-interaction {
+  position: absolute;
+  z-index: 12;
+  inset: 0;
+  cursor: grab;
+  outline: none;
+  touch-action: none;
+}
+
+.photo-interaction[data-dragging] {
+  cursor: grabbing;
+}
+
+.photo-interaction:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ink);
+  border-radius: inherit;
+}
+
+.photo-flash {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  background: white;
+  pointer-events: none;
+  animation: photo-flash 380ms ease-out forwards;
+}
+
+@keyframes photo-flash {
+  from {
+    opacity: 0.95;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Obturateur rond du declencheur et de l'entree. */
+.photo-obturateur {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 99px;
+  background: currentColor;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 35%);
+}
+
+.photo-obturateur--petit {
+  width: 9px;
+  height: 9px;
+  box-shadow: 0 0 0 1.5px rgb(255 255 255 / 35%);
+}
+
+.photo-declencheur {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.photo-declencheur.occupe {
+  opacity: 0.6;
+}
+
+.photo-declencheur:not(.occupe):hover {
+  transform: translateY(-1px);
+}
+
+.photo-declencheur,
+.photo-entree {
+  transition: transform 120ms ease;
+}
+
+/*
+ * Barre de couleur et cadran d'angle, en pilule : le nuancier, la boule
+ * et le mode photo parlent la meme langue ronde.
+ */
+.teinte-barre {
+  position: relative;
+  height: 2.25rem;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgb(23 32 58 / 0.1);
+}
+
+.teinte-barre:has(input:focus-visible) {
+  box-shadow:
+    inset 0 0 0 1px rgb(23 32 58 / 0.1),
+    0 0 0 2px var(--ink);
+}
+
+.teinte-cadran {
+  position: relative;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  box-shadow:
+    inset 0 0 0 1px rgb(23 32 58 / 0.12),
+    0 1px 2px rgb(23 32 58 / 0.08);
+  transition: transform 120ms ease;
+}
+
+.teinte-cadran:hover {
+  transform: scale(1.06);
+}
+
+.teinte-cadran:active {
+  cursor: grabbing;
+  transform: scale(0.98);
+}
+
+.teinte-cadran:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.teinte-cadran-aiguille {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 0 0 1px rgb(23 32 58 / 0.28);
+}
+
+.teinte-oeil {
+  position: relative;
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  cursor: pointer;
+}
+
+.teinte-oeil-blanc {
+  display: block;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgb(23 32 58 / 0.1);
+  transition:
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.teinte-oeil:hover .teinte-oeil-blanc {
+  transform: scale(1.06);
+}
+
+.teinte-oeil:has(input:focus-visible) .teinte-oeil-blanc,
+.teinte-oeil.est-teint .teinte-oeil-blanc {
+  box-shadow:
+    inset 0 0 0 1px rgb(23 32 58 / 0.1),
+    0 0 0 2px var(--ink);
+}
+
+.teinte-oeil-pupille {
+  position: absolute;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  background: var(--ink);
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.7);
+  pointer-events: none;
+}
+
+.teinte-oeil input[type='color'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  cursor: pointer;
 }
 
 

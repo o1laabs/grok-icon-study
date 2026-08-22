@@ -301,19 +301,25 @@
     return pts;
   }
 
-  function projectEye(pose, home, faceX, faceY, lx, ly, angle) {
+  function projectEye(pose, home, faceX, faceY, lx, ly, angle, rim) {
     const a = (angle || 0) * Math.PI / 180;
     const c = Math.cos(a);
     const s = Math.sin(a);
     const x = faceX + lx * c - ly * s;
     const y = faceY + lx * s + ly * c;
-    const lon = x / FACE_R;
-    const lat = y / FACE_R;
-    const cl = Math.cos(lat);
-    const rotated = quatRotate(screenOf(pose, home), [cl * Math.sin(lon), Math.sin(lat), cl * Math.cos(lon)]);
-    const depth = rotated[2] * FACE_R;
+    // Face coords are authored against FACE_R=120 (original lab units) but the
+    // physical head rides `rim` overlay units so the eye sphere's silhouette
+    // lands on the visible head edge. Past the rim points stay raw on the z=0
+    // plane (ellipsoidFrontSample semantics): the eye rides over the edge and
+    // gets sliced by the head clip instead of folding back inward.
+    const headR = rim || 95;
+    const dx = x / FACE_R;
+    const dy = y / FACE_R;
+    const dz = Math.sqrt(Math.max(0, 1 - dx * dx - dy * dy));
+    const rotated = quatRotate(screenOf(pose, home), [dx, dy, dz]);
+    const depth = rotated[2] * headR;
     const sc = FOCAL / Math.max(FOCAL - depth, 0.0001);
-    return [rotated[0] * FACE_R * sc, rotated[1] * FACE_R * sc, rotated[2]];
+    return [rotated[0] * headR * sc, rotated[1] * headR * sc, rotated[2]];
   }
 
   function overlayToSvg(svg, x, y) {
@@ -369,7 +375,7 @@
     return pts;
   }
 
-  function customEyePolys({ pose, eyes, svg, n = 48, home = EYE_HOME }) {
+  function customEyePolys({ pose, eyes, svg, n = 48, home = EYE_HOME, rim }) {
     if (!svg || !pose) return null;
     const src = eyes || DEFAULT_EYES;
     const sides = ["left", "right"];
@@ -380,18 +386,23 @@
       const local = roundedRect(Math.max(tune.width, 1), Math.max(tune.height, 1));
       let z = 0;
       const projected = local.map(([lx, ly]) => {
-        const p = projectEye(pose, home, faceX, faceY, lx, ly, tune.angle);
+        const p = projectEye(pose, home, faceX, faceY, lx, ly, tune.angle, rim);
         z += p[2];
         return overlayToSvg(svg, p[0], p[1]);
       });
-      return { pts: resampleRing(projected, n), visible: z > 0 };
+      return { pts: resampleRing(projected, n), visible: z > 0, zAvg: z / Math.max(local.length, 1) };
     });
   }
 
-  function blendCustomEyes({ eyeEls, pose, eyes, svg, mix, n = 48 }) {
+  // Visibility hysteresis: drag jitter around the silhouette boundary would
+  // otherwise pop the eye in and out every few frames.
+  const VIS_HIDE = -0.006;
+  const VIS_SHOW = 0.004;
+
+  function blendCustomEyes({ eyeEls, pose, eyes, svg, mix, n = 48, rim }) {
     const k = clamp(mix, 0, 1);
     if (k <= 0.002 || !eyeEls) return;
-    const custom = customEyePolys({ pose, eyes, svg, n });
+    const custom = customEyePolys({ pose, eyes, svg, n, rim });
     if (!custom) return;
     const gate = 0.22;
     const shapeK = k >= gate ? 1 : Dke(k / gate);
@@ -399,9 +410,13 @@
       const el = eyeEls[i];
       const expr = sampleEl(el, n);
       if (!el || !expr || !custom[i]) continue;
+      let shown = el.__eyeShown != null ? el.__eyeShown : custom[i].visible;
+      if (shown && custom[i].zAvg < VIS_HIDE) shown = false;
+      if (!shown && custom[i].zAvg > VIS_SHOW) shown = true;
+      el.__eyeShown = shown;
       el.setAttribute("d", polyPath(lerpPoly(custom[i].pts, expr, 1 - shapeK)));
       el.removeAttribute("transform");
-      if (shapeK > 0.55) el.style.display = custom[i].visible ? "" : "none";
+      if (shapeK > 0.55) el.style.display = shown ? "" : "none";
     }
   }
 

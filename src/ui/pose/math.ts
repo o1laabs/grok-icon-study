@@ -83,7 +83,9 @@ const nearestEquivalentAngle = (angle: number, current: number) => {
   return clamp(result, -365, 365)
 }
 
-export const POSE_HOME: HeadPose = { turn: 33, tilt: -19, roll: 38 }
+// Engine eyes.js EYE_HOME: the frame where eyes rest centered. Wires, gizmo
+// and eye projection share it so the grid's central meridian splits the eyes.
+export const EYE_HOME: HeadPose = { turn: 17, tilt: -14, roll: 29 }
 
 export const conjugateFlipY = ([w, x, y, z]: Quaternion): Quaternion => [w, -x, y, -z]
 
@@ -99,18 +101,18 @@ export const poseFromOrientation = (pose: HeadPose, orientation: Quaternion): He
   }
 }
 
-export const visualOrientation = (pose: HeadPose, home: HeadPose = POSE_HOME): Quaternion => {
+export const visualOrientation = (pose: HeadPose, home: HeadPose = EYE_HOME): Quaternion => {
   const [w, x, y, z] = orientationOf(home)
   return multiplyQuaternions(orientationOf(pose), [w, -x, -y, -z])
 }
 
-export const screenOrientation = (pose: HeadPose, home: HeadPose = POSE_HOME): Quaternion =>
+export const screenOrientation = (pose: HeadPose, home: HeadPose = EYE_HOME): Quaternion =>
   conjugateFlipY(visualOrientation(pose, home))
 
 export const poseFromScreen = (
   pose: HeadPose,
   screen: Quaternion,
-  home: HeadPose = POSE_HOME
+  home: HeadPose = EYE_HOME
 ): HeadPose =>
   poseFromOrientation(pose, multiplyQuaternions(conjugateFlipY(screen), orientationOf(home)))
 
@@ -229,7 +231,7 @@ export const projectLocalPoint = (
   pose: HeadPose,
   local: Point3,
   origin: readonly [number, number] = [0, 0],
-  home: HeadPose = POSE_HOME
+  home: HeadPose = EYE_HOME
 ): Point3 => {
   const rotated = rotateWithQuaternion(screenOrientation(pose, home), local)
   const scale = FOCAL / Math.max(FOCAL - rotated[2] * PERSPECTIVE, 0.0001)
@@ -278,7 +280,7 @@ export const projectEyePoint = (
   localX: number,
   localY: number,
   angleDeg: number,
-  home: HeadPose = POSE_HOME
+  home: HeadPose = EYE_HOME
 ): Point3 => {
   const angle = radians(angleDeg)
   const cosine = Math.cos(angle)
@@ -299,22 +301,24 @@ export const projectFacePoint = (
   y: number,
   radius: number,
   origin: readonly [number, number] = [radius, radius],
-  home: HeadPose = POSE_HOME
+  home: HeadPose = EYE_HOME
 ): Point3 => {
-  const longitude = x / radius
-  const latitude = y / radius
-  const cosine = Math.cos(latitude)
-  const local: Point3 = [
-    cosine * Math.sin(longitude),
-    Math.sin(latitude),
-    cosine * Math.cos(longitude)
-  ]
+  const diskX = x / radius
+  const diskY = y / radius
+  // Face coords are authored against RADIUS (original lab units) but ride the
+  // visible head: rim = RADIUS scaled to the head edge in overlay units, so
+  // the eye sphere silhouette lands on the head outline (engine parity).
+  const rim = radius * (95 / 120)
+  // Past the silhouette points stay raw on the z=0 plane and get sliced by
+  // the head clip instead of folding back inward.
+  const diskZ = Math.sqrt(Math.max(0, 1 - diskX * diskX - diskY * diskY))
+  const local: Point3 = [diskX, diskY, diskZ]
   const rotated = rotateWithQuaternion(screenOrientation(pose, home), local)
-  const depth = rotated[2] * radius
+  const depth = rotated[2] * rim
   const scale = FOCAL / Math.max(FOCAL - depth * PERSPECTIVE, 0.0001)
   return [
-    origin[0] + rotated[0] * radius * scale,
-    origin[1] + rotated[1] * radius * scale,
+    origin[0] + rotated[0] * rim * scale,
+    origin[1] + rotated[1] * rim * scale,
     rotated[2]
   ]
 }

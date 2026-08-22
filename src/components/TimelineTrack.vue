@@ -368,7 +368,7 @@ function onRulerMove(e: PointerEvent) {
           <li
             v-for="(b, i) in blocks"
             :key="`${i}-${b.state}`"
-            class="group relative shrink-0 pr-1"
+            class="group relative shrink-0 pr-1.5"
             :class="lifted(i) ? 'z-20' : 'transition-transform duration-150 ease-out'"
             :style="{
               width: `${b.duration * scale}px`,
@@ -422,10 +422,12 @@ function onRulerMove(e: PointerEvent) {
               </span>
             </button>
 
-            <!-- poignee de duree : bouton a part entiere, donc utilisable au clavier -->
+            <!-- poignee de duree : bouton a part entiere, donc utilisable au clavier.
+                 `right-px` + gouttiere de 6px : la ligne garde 1px d'air de chaque
+                 cote, elle ne touche plus le ring de la carte selectionnee -->
             <button
               type="button"
-              class="absolute inset-y-2 right-0.5 w-1 cursor-ew-resize rounded-full bg-[var(--muted)] opacity-0 transition group-hover:opacity-60 hover:opacity-100! focus-visible:opacity-100"
+              class="absolute inset-y-2 right-px w-1 cursor-ew-resize rounded-full bg-[var(--muted)] opacity-0 transition group-hover:opacity-60 hover:opacity-100! focus-visible:opacity-100"
               :aria-label="
                 t('timeline.blockDurationAria', {
                   state: label(i),

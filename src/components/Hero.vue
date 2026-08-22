@@ -94,7 +94,7 @@ defineExpose({
   <div class="relative inline-block aspect-square max-w-full" :style="{ width: `${props.size}px` }">
     <svg
       ref="svg"
-      class="absolute inset-0 h-full w-full overflow-visible"
+      class="absolute inset-0 h-full w-full max-w-full max-h-full overflow-visible"
       :width="props.size"
       :height="props.size"
       role="img"

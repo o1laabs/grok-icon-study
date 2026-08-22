@@ -15,7 +15,7 @@ export type EyeTune = {
   spacing: number
 }
 
-export type EyeLinks = { width: boolean; height: boolean; size: boolean }
+export type EyeLinks = { width: boolean; height: boolean; size: boolean; rotation: boolean }
 
 export type BodyOffset = { tx: number; ty: number; spin: number }
 
@@ -42,7 +42,7 @@ export const DEFAULT_EYES: EyeTune = {
   spacing: 35
 }
 
-export const DEFAULT_LINKS: EyeLinks = { width: true, height: true, size: true }
+export const DEFAULT_LINKS: EyeLinks = { width: true, height: true, size: true, rotation: true }
 
 export const defaultManual = (): ManualState => ({
   on: false,
@@ -129,7 +129,8 @@ export const parseManual = (raw: string | null): ManualState => {
       links: {
         width: links.width !== false,
         height: links.height !== false,
-        size: links.size !== false
+        size: links.size !== false,
+        rotation: links.rotation !== false
       },
       selected
     }
