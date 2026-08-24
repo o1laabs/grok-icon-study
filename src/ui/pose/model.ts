@@ -60,42 +60,46 @@ export const defaultManual = (): ManualState => ({
 const num = (value: unknown, fallback: number) =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback
 
+const arrondi = (value: number, decimales = 1) => Number(value.toFixed(decimales))
+
 const eyeOf = (value: unknown, fallback: EyeSide): EyeSide => {
   const raw = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
   const width = num(raw.width, fallback.width)
   const height = num(raw.height, fallback.height)
   return {
-    width: clamp(width <= 5 ? width * 20 : width, 10, 110),
-    height: clamp(height <= 5 ? height * 50 : height, 10, 110),
-    size: clamp(num(raw.size, fallback.size), 0.35, 2.2),
-    angle: num(raw.angle, fallback.angle),
-    x: clamp(num(raw.x, fallback.x), -48, 48),
-    y: clamp(num(raw.y, fallback.y), -48, 48)
+    width: arrondi(clamp(width <= 5 ? width * 20 : width, 10, 110)),
+    height: arrondi(clamp(height <= 5 ? height * 50 : height, 10, 110)),
+    size: arrondi(clamp(num(raw.size, fallback.size), 0.35, 2.2), 2),
+    angle: arrondi(num(raw.angle, fallback.angle)),
+    x: arrondi(clamp(num(raw.x, fallback.x), -48, 48)),
+    y: arrondi(clamp(num(raw.y, fallback.y), -48, 48))
   }
 }
 
 export const clampPose = (pose: HeadPose): HeadPose => ({
-  turn: clamp(pose.turn, -365, 365),
-  tilt: clamp(pose.tilt, -365, 365),
-  roll: clamp(pose.roll, -365, 365)
+  turn: arrondi(clamp(pose.turn, -365, 365)),
+  tilt: arrondi(clamp(pose.tilt, -365, 365)),
+  roll: arrondi(clamp(pose.roll, -365, 365))
 })
 
 export const clampOffset = (offset: BodyOffset): BodyOffset => ({
-  tx: clamp(offset.tx, -90, 90),
-  ty: clamp(offset.ty, -90, 90),
-  spin: clamp(offset.spin, -180, 180)
+  tx: arrondi(clamp(offset.tx, -90, 90)),
+  ty: arrondi(clamp(offset.ty, -90, 90)),
+  spin: arrondi(clamp(offset.spin, -180, 180))
 })
 
 export const clampEyes = (eyes: EyeTune): EyeTune => ({
   left: eyeOf(eyes.left, DEFAULT_EYE),
   right: eyeOf(eyes.right, DEFAULT_EYE),
-  spacing: clamp(
-    (() => {
-      const value = num(eyes.spacing, 35)
-      return value <= 5 ? value * 35 : value
-    })(),
-    0,
-    150
+  spacing: arrondi(
+    clamp(
+      (() => {
+        const value = num(eyes.spacing, 35)
+        return value <= 5 ? value * 35 : value
+      })(),
+      0,
+      150
+    )
   )
 })
 

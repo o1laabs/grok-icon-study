@@ -17,11 +17,13 @@ export const COMPOSITION_DEFAUT: CompositionPhoto = { x: 0, y: 0, scale: 1, corn
 const borne = (valeur: number, min: number, max: number) =>
   Math.min(max, Math.max(min, Number.isFinite(valeur) ? valeur : min))
 
+const arrondi = (valeur: number, decimales = 1) => Number(valeur.toFixed(decimales))
+
 export const normaliseComposition = (c: CompositionPhoto): CompositionPhoto => ({
-  x: borne(c.x, -180, 180),
-  y: borne(c.y, -180, 180),
-  scale: borne(c.scale, 0.4, 3),
-  cornerRadius: borne(c.cornerRadius, 0, 50)
+  x: arrondi(borne(c.x, -180, 180)),
+  y: arrondi(borne(c.y, -180, 180)),
+  scale: arrondi(borne(c.scale, 0.4, 3), 3),
+  cornerRadius: arrondi(borne(c.cornerRadius, 0, 50))
 })
 
 /** Pourcent (0-50) vers unites viewBox du cadre 300. */
