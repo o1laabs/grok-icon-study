@@ -21,3 +21,5 @@ bible-strong-avatar-lab/
 extracted/
 extract-asar.js
 assets/
+.vercel
+.env*
