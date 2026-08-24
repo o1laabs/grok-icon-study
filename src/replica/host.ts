@@ -36,6 +36,7 @@ export type ReplicaInput = {
   paper: string
   size: number
   eye?: number
+  autoTricks?: boolean
 }
 
 const TILE_MAX = 6
@@ -118,7 +119,8 @@ export async function mountReplica(
     eyeColor: input.paper,
     paused: driven ? false : live ? false : 'hold-pose',
     driven,
-    eyeIndex: input.eye
+    eyeIndex: input.eye,
+    autoTricks: input.autoTricks ?? true
   })
   const noop = {
     apply: () => {},
@@ -154,6 +156,8 @@ export async function mountReplica(
       if (next.follow !== last.follow) bot.setFollowPointer(next.follow)
       if (next.paper !== last.paper) bot.setEyeColor(next.paper)
       if (next.size !== last.size) bot.setSize(next.size)
+      if ((next.autoTricks ?? true) !== (last.autoTricks ?? true))
+        bot.setAutoTricks(next.autoTricks ?? true)
       last = { ...next }
     },
     spin: () => bot.spinOnce(1),

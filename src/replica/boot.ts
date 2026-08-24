@@ -32,6 +32,7 @@ export type ReplicaBot = {
   setSize: (px: number) => void
   seekEye: (index: number, opts?: { snap?: boolean }) => void
   setPlaylistHold: (on: boolean) => void
+  setAutoTricks: (on: boolean) => void
   playback: () => ReplicaPlayback
   destroy: () => void
 }

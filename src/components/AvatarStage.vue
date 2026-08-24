@@ -18,6 +18,7 @@ const props = withDefaults(
     playing?: boolean
     mix?: number
     echelle?: number
+    autoTricks?: boolean
   }>(),
   {
     size: 440,
@@ -30,7 +31,8 @@ const props = withDefaults(
     tools: false,
     playing: false,
     mix: 0,
-    echelle: 1
+    echelle: 1,
+    autoTricks: true
   }
 )
 
@@ -125,6 +127,7 @@ defineExpose({
       :state="state"
       :follow="follow && !active"
       :paper="paper"
+      :auto-tricks="autoTricks"
       @ready="onReady"
     />
     <ManualCanvas

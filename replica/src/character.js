@@ -69,6 +69,10 @@
       this.driven = !!opts.driven;
       this.paused = !!opts.paused;
       this.reduceMotion = opts.reduceMotion ?? (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+      // autoTricks gates the AUTOMATIC spin sources (wantPn, celebrate re-arm,
+      // idle trick loop, shape-change trick). State-inherent rotation
+      // (humming/loading ovSpin) and explicit spinOnce stay untouched.
+      this.autoTricks = opts.autoTricks !== false;
       this.badgeColor = opts.badgeColor || "var(--gb-badge, #1d9bf0)";
       this.sizePx = opts.sizePx || null;
       this.eyeColor = opts.eyeColor || null;
@@ -642,6 +646,10 @@
       this.playlistHold = next;
     }
 
+    setAutoTricks(on) {
+      this.autoTricks = !!on;
+    }
+
     playback() {
       const remain = this.playlistHold
         ? (this.eyeRemain || 0)
@@ -893,7 +901,7 @@
     }
 
     _cycleShapeTrick() {
-      if (this.reduceMotion || this.paused || this.driven || this.manualHold) return;
+      if (this.reduceMotion || this.paused || this.driven || this.manualHold || !this.autoTricks) return;
       this.trickCycle = (this.trickCycle + 1) % 5;
       this.wildWide = false;
       if (this.trickCycle === 0) this._pn(1);
@@ -1039,7 +1047,7 @@
         this.ctx.wantBlink = false;
       }
       if (!this.manualHold && this.ctx.wantPn) {
-        this._pn(...this.ctx.wantPn);
+        if (this.autoTricks) this._pn(...this.ctx.wantPn);
         this.ctx.wantPn = null;
       }
       if (!this.manualHold && this.ctx.wantBurst) {
@@ -1059,12 +1067,12 @@
         this._stepOverlay(now);
       }
 
-      if (!this.manualHold && this.celebrateAt > 0 && now >= this.celebrateAt && !this.trick) {
+      if (this.autoTricks && !this.manualHold && this.celebrateAt > 0 && now >= this.celebrateAt && !this.trick) {
         this.trick = TR.startTrick("spinWild", this.reduceMotion || this.paused);
         this.celebrateAt = now + 6200;
       }
 
-      if (!this.driven && !this.manualHold && now >= this.trickAt) {
+      if (this.autoTricks && !this.driven && !this.manualHold && now >= this.trickAt) {
         if ((V_T.has(this.state) || B_T.has(this.state)) && !this.spinTurn && this.hopAt < 0 && !this.trick) {
           const z = Math.random();
           if (V_T.has(this.state)) {

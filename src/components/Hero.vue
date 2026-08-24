@@ -11,6 +11,7 @@ const props = withDefaults(
     state?: string
     follow?: boolean
     paper?: string
+    autoTricks?: boolean
   }>(),
   {
     size: 440,
@@ -18,7 +19,8 @@ const props = withDefaults(
     color: 'black',
     state: 'idle',
     follow: false,
-    paper: '#f9f9f9'
+    paper: '#f9f9f9',
+    autoTricks: true
   }
 )
 
@@ -37,7 +39,8 @@ function input() {
     color: props.color,
     follow: props.follow,
     paper: props.paper,
-    size: props.size
+    size: props.size,
+    autoTricks: props.autoTricks
   }
 }
 
@@ -66,7 +69,7 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => [props.state, props.shape, props.color, props.follow, props.paper, props.size],
+  () => [props.state, props.shape, props.color, props.follow, props.paper, props.size, props.autoTricks],
   () => replica?.apply(input())
 )
 

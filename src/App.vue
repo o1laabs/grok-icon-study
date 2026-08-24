@@ -127,6 +127,7 @@ const cycle = computed(() => cycles.value.find((c) => c.id === activeId.value) ?
 const state = ref(intro.value ? 'idle' : (cycle.value.blocks[block.value]?.state ?? 'idle'))
 
 const gauche = computed(() => view.value === 'reglages' && !preview.value)
+const autoTricks = computed(() => view.value === 'animations')
 const droite = computed(() => view.value !== 'reglages' && !preview.value && !intro.value)
 const plein = computed(() => preview.value || photo.value)
 const follow = computed(() => view.value === 'reglages' && !preview.value)
@@ -740,6 +741,7 @@ onUnmounted(() => {
             :echelle="photo ? photoComposition.scale : 1"
             :playing="posePlay"
             :mix="poseMix"
+            :auto-tricks="autoTricks"
             @ready="onHeroReady"
             @update:manual="manual = $event"
           />
