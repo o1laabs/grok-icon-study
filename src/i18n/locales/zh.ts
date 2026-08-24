@@ -178,6 +178,8 @@ const zh = {
     labAria: '打开原来的 playground',
     showcase: '展示页',
     showcaseAria: '打开录屏展示',
+    github: 'GitHub 仓库',
+    githubAria: '在 GitHub 打开本仓库',
     credits: '非官方学习稿。动效是 replica 机芯，版式参考 bloub。与 xAI 无关。',
     missing: '没有 geometry-data.js — 只有壳，没有角色。'
   },

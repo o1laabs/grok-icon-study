@@ -182,6 +182,8 @@ const en: typeof zh = {
     labAria: 'Open the original playground',
     showcase: 'Showcase',
     showcaseAria: 'Open the recording showcase',
+    github: 'GitHub repository',
+    githubAria: 'Open this repository on GitHub',
     credits: 'Unofficial study. Motion from the replica engine; layout after bloub. Not affiliated with xAI.',
     missing: 'No geometry-data.js — stock chrome, no character.'
   },

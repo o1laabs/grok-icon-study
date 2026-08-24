@@ -76,6 +76,31 @@ function auClavier(event: KeyboardEvent, index: number) {
     >
       <span class="flex-1">{{ t('settings.showcase') }}</span>
     </a>
+    <a
+      class="mt-1.5 flex items-center gap-2 rounded-xl border border-[var(--line)] px-3 py-2 text-sm transition hover:border-[var(--muted)]"
+      href="https://github.com/blessonism/grok-icon-study"
+      target="_blank"
+      rel="noopener noreferrer"
+      :aria-label="t('settings.githubAria')"
+    >
+      <span class="flex-1">{{ t('settings.github') }}</span>
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 12 12"
+        aria-hidden="true"
+        class="shrink-0 text-[var(--muted)]"
+      >
+        <path
+          d="M3 9 9 3M9 3H4.5M9 3v4.5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </a>
     <p class="mt-4 text-xs text-[var(--muted)]">{{ t('settings.credits') }}</p>
     <p v-if="!ready" class="mt-2 text-xs text-[var(--muted)]">{{ t('settings.missing') }}</p>
   </div>
