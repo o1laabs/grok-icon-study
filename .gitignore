@@ -6,8 +6,7 @@ dist
 # Local study notes (full personal README)
 README.local.md
 
-# Local-only character data. Do not commit extracted or third-party geometry.
-replica/geometry-data.js
+# Local-only character snapshot
 replica/grok-blob-idle.svg
 
 # Local snap output
