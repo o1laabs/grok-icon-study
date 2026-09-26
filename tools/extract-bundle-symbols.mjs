@@ -111,6 +111,201 @@ const TARGETS = [
   },
 ];
 
+// ── 结构定位器 ────────────────────────────────────────────────
+// 压缩产物的变量名每版都变（上游 u3/Jo/snt → 真实包 Wt/cs/I3），
+// 但「数据结构」跨版本稳定。这些定位器不靠名字，靠形状 + 值域找目标。
+// 名字只在最后作为「输出文件名」用，不作为匹配依据。
+// ── SVG path 常量扫描 ─────────────────────────────────────────
+// 真实 app.asar 里，身形轮廓是烘焙好的 SVG path 字符串（不是运行时算的）。
+// 但同一个 bundle 里也混着大量 UI 图标（Google/Slack 等品牌 logo），
+// 靠长度或前缀都区分不开。判据：品牌 logo 的 path 里含品牌色（#4285F4 / #E01E5A 等），
+// 且体积大（1KB+ 的复杂图标）；bot 身形轮廓是纯数字路径、无 fill 属性。
+const SVG_PATH_SCAN = {
+  name: "svg-paths",
+  hint: "烘焙的 SVG path 常量（含 UI 图标，需人工区分）",
+  // 匹配 name="M<数字>…" 且长度 > 200 的字符串
+  re: /([A-Za-z_$][\w$]*)\s*=\s*"(M[-\d.][^"]{200,})"/g,
+};
+
+// ── 几何引擎函数扫描 ──────────────────────────────────────────
+// 真实包里紧跟在身形 path 后面的是几何处理函数（实测发现 PCA 主成分分析）。
+// 这些是「这个角色怎么被算出来」的核心，比数据本身更有参考价值。
+const GEOMETRY_FN_SIGNS = [
+  { name: "pca", re: /\bfunction\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{[^}]{0,400}(?:covarianc|eigen|powerIterat|principal)/i },
+  { name: "resample", re: /\bfunction\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{[^}]{0,300}(?:arcLength|resample|equalSpace|interpolat)/i },
+  { name: "normalize", re: /\bfunction\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{[^}]{0,300}(?:centroid|normalize|boundingBox|scaleTo)/i },
+];
+
+// 扫出 bundle 里所有「烘焙好的 SVG path 字符串常量」。
+// 返回 [{name, path, at, len, brandColors}]，brandColors 用来标记疑似 UI 图标。
+function findSvgPathConstants(src) {
+  const out = [];
+  const re = new RegExp(SVG_PATH_SCAN.re.source, "g");
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    const name = m[1];
+    const p = m[2];
+    // 品牌色检测：path 前后 200 字符内出现品牌色 hex → 大概率是 UI 图标
+    const around = src.slice(Math.max(0, m.index - 200), m.index + m[0].length + 200);
+    const BRAND = [
+      ["#4285F4", "Google-blue"], ["#EA4335", "Google-red"],
+      ["#FBBC05", "Google-yellow"], ["#34A853", "Google-green"],
+      ["#E01E5A", "Slack-red"], ["#36C5F0", "Slack-blue"],
+      ["#2EB67D", "Slack-green"], ["#ECB22E", "Slack-yellow"],
+      ["#0A66C2", "LinkedIn"], ["#1877F2", "Facebook"],
+      ["#5865F2", "Discord"], ["#FF4500", "Reddit"],
+      ["#1DB954", "Spotify"], ["#635BFF", "Stripe"],
+    ];
+    const brandColors = [];
+    for (const [hex, label] of BRAND) {
+      if (around.toUpperCase().includes(hex.toUpperCase())) brandColors.push(label);
+    }
+
+    // ── 角色几何 vs UI 图标：靠「路径坐标量级」区分 ──
+    // 实测：UI 图标（FontAwesome / Lucide 那类）坐标都在 0~24 的小视口里，
+    // 角色轮廓在 228×234 的画布上（M228.541 114.228 …）。
+    // ⚠️ 不能对整串取 max：路径里还混着 arc 的半径/旋转角、相对位移的小数，
+    // 会捞到无关的大数（实测把 20×20 的分享图标算成 ≤998）。
+    // 只取 M/L/C/S/Q/T 这些「定位命令」后面紧跟的坐标对。
+    let maxAbs = 0;
+    const cmdRe = /[MLCSQT]\s*(-?\d+(?:\.\d+)?)[ ,](-?\d+(?:\.\d+)?)/g;
+    let cm;
+    while ((cm = cmdRe.exec(p)) !== null) {
+      for (const g of [cm[1], cm[2]]) {
+        const v = Math.abs(parseFloat(g));
+        if (v > maxAbs) maxAbs = v;
+      }
+    }
+    const looksLikeIcon = maxAbs <= 64;
+
+    out.push({ name, path: p, at: m.index, len: p.length, brandColors, maxAbs, looksLikeIcon });
+  }
+  // 长的排前面（复杂图标 / 角色轮廓都比简单图标大）
+  out.sort((a, b) => b.len - a.len);
+  return out;
+}
+
+
+
+const STRUCT_LOCATORS = [
+  {
+    // 眼睛表：最外层数组 → 元素是多边形数组 → 多边形是 [float,float] 点
+    // 特征：20~60 个元素；元素是 ≥2 个数组；首点 x 在 0~400
+    name: "eyes-by-structure",
+    kind: "eyes",
+    desc: "眼睛多边形表（结构定位，不依赖变量名）",
+    find(src, matchBrackets) {
+      const re = /([A-Za-z_$][\w$]*)\s*=\s*(\[\[\[\[-?\d)/g;
+      let m;
+      let best = null;
+      while ((m = re.exec(src)) !== null) {
+        // ⚠️ 不能写 m.index + m[0].length - 1：那指向匹配串最后一个字符
+        // （正则末尾的 \d 或 .），不是开括号。必须显式找第一个 '['。
+        const open = m.index + m[0].indexOf("[");
+        const span = matchBrackets(src, open, []);
+        if (!span) continue;
+        const len = span[1] - span[0];
+        if (len < 5000 || len > 200000) continue;
+        const r = literalToJson(src.slice(span[0], span[1]), []);
+        if (!r.ok) continue;
+        const v = r.value;
+        if (!Array.isArray(v) || v.length < 20 || v.length > 60) continue;
+        if (!Array.isArray(v[0]) || !Array.isArray(v[0][0])) continue;
+        const p0 = v[0][0][0];
+        if (!Array.isArray(p0) || typeof p0[0] !== "number") continue;
+        if (p0[0] < 0 || p0[0] > 400 || p0[1] < 0 || p0[1] > 400) continue;
+        if (!best || len > best.len) best = { name: m[1], span, value: v, len };
+      }
+      return best;
+    },
+    verify: (v) => Array.isArray(v) && v.length >= 20 && Array.isArray(v[0]) && Array.isArray(v[0][0]),
+  },
+  {
+    // 渐变色板：对象 → 值是多色标对象（含 2+ 个 #hex 字段）
+    name: "palette-gradients-by-structure",
+    kind: "palette-gradients",
+    desc: "渐变色板（结构定位：值含 2+ 个 #hex 字段）",
+    find(src, matchBrackets) {
+      const re = /([A-Za-z_$][\w$]*)\s*=\s*\{\s*[a-z][\w$]*\s*:\s*\{[^}]*#[0-9A-Fa-f]{3,8}/g;
+      let m;
+      let best = null;
+      while ((m = re.exec(src)) !== null) {
+        const open = m.index + m[0].indexOf("{");
+        const span = matchBrackets(src, open, []);
+        if (!span) continue;
+        const r = literalToJson(src.slice(span[0], span[1]), []);
+        if (!r.ok) continue;
+        const v = r.value;
+        if (!v || typeof v !== "object" || Array.isArray(v)) continue;
+        const keys = Object.keys(v);
+        if (keys.length < 8 || keys.length > 20) continue;
+        // 每个值必须是对象，且含 ≥2 个 #hex 字符串
+        const allGrad = keys.every((k) => {
+          const o = v[k];
+          if (!o || typeof o !== "object") return false;
+          const hexes = Object.values(o).filter((x) => typeof x === "string" && /^#[0-9A-Fa-f]{3,8}$/.test(x));
+          return hexes.length >= 2;
+        });
+        if (!allGrad) continue;
+        const len = span[1] - span[0];
+        if (!best || len > best.len) best = { name: m[1], span, value: v, len };
+      }
+      return best;
+    },
+    verify: (v) => v && typeof v === "object" && Object.keys(v).length >= 8,
+  },
+  {
+    // 单色色板：数组 → 元素是 {id,label,value:#hex}
+    name: "palette-flat-by-structure",
+    kind: "palette-flat",
+    desc: "单色色板（结构定位：[{id,label,value}]）",
+    find(src, matchBrackets) {
+      const re = /([A-Za-z_$][\w$]*)\s*=\s*(\[\{\s*id\s*:\s*")/g;
+      let m;
+      let best = null;
+      while ((m = re.exec(src)) !== null) {
+        const open = m.index + m[0].length - 1;
+        const span = matchBrackets(src, open, []);
+        if (!span) continue;
+        const r = literalToJson(src.slice(span[0], span[1]), []);
+        if (!r.ok) continue;
+        const v = r.value;
+        if (!Array.isArray(v) || v.length < 5 || v.length > 30) continue;
+        if (!v.every((x) => x && typeof x === "object" && "id" in x && "value" in x)) continue;
+        const len = span[1] - span[0];
+        if (!best || len > best.len) best = { name: m[1], span, value: v, len };
+      }
+      return best;
+    },
+    verify: (v) => Array.isArray(v) && v.length >= 5 && v.every((x) => x && x.id && x.value),
+  },
+  {
+    // 状态分类总表：数组 → 元素是 {label,states[]}
+    name: "state-taxonomy-by-structure",
+    kind: "state-taxonomy",
+    desc: "状态分类总表（结构定位：[{label,states}]）",
+    find(src, matchBrackets) {
+      const re = /([A-Za-z_$][\w$]*)\s*=\s*(\[\{\s*label\s*:\s*")/g;
+      let m;
+      let best = null;
+      while ((m = re.exec(src)) !== null) {
+        const open = m.index + m[0].length - 1;
+        const span = matchBrackets(src, open, []);
+        if (!span) continue;
+        const r = literalToJson(src.slice(span[0], span[1]), []);
+        if (!r.ok) continue;
+        const v = r.value;
+        if (!Array.isArray(v) || v.length < 3 || v.length > 12) continue;
+        if (!v.every((x) => x && x.label && Array.isArray(x.states))) continue;
+        const len = span[1] - span[0];
+        if (!best || len > best.len) best = { name: m[1], span, value: v, len };
+      }
+      return best;
+    },
+    verify: (v) => Array.isArray(v) && v.length >= 3 && v.every((x) => x.label && Array.isArray(x.states)),
+  },
+];
+
 // 顺手扫的候选表（名字不固定，靠启发式找）
 // 这些是 v0.18.0 bundle 里真实存在、且静态可解析的表。
 // 名字（g_t / g1e / Qtt …）是压缩产物，换版本会变，所以用「结构特征」而不是名字来定位。
@@ -469,9 +664,35 @@ async function main() {
     }
 
     if (!hits.length) {
-      console.log(`  ⚠️  ${t.name}: 未找到（锚点 ${t.anchor}）`);
-      summary.extracted.push({ name: t.name, status: "not-found" });
-      continue;
+      // ── 名字没命中 → 退回结构定位 ──
+      // 压缩产物的变量名每版都变，硬编码名字必然随版本失效。
+      // 结构定位器只看数据形状，不看名字，所以它是跨版本的主路径，
+      // 名字匹配只是「快路径」（命中就省一次全量扫描）。
+      const loc = STRUCT_LOCATORS.find((L) => L.kind === t.kind);
+      if (loc) {
+        for (const b of bundles) {
+          let r = null;
+          try {
+            r = loc.find(b.src, matchBrackets);
+          } catch (e) {
+            if (process.env.DBG) console.log(`      [dbg] ${loc.name} 在 ${b.path} 抛错: ${e.message}`);
+          }
+          if (r) {
+            console.log(`  ℹ️  ${t.name}: 名字未命中 → 结构定位到 \`${r.name}\`（${r.span[1] - r.span[0]} 字节，来自 ${b.path}）`);
+            hits.push({ bundle: b, span: r.span, len: r.span[1] - r.span[0], viaStructure: r.name });
+            break;
+          }
+        }
+        if (process.env.DBG && !hits.length) {
+          console.log(`      [dbg] ${loc.name}: 扫了 ${bundles.length} 个 bundle 都未命中`);
+          console.log(`      [dbg] bundles: ${bundles.map((b) => b.path + "(" + b.src.length + ")").join(", ")}`);
+        }
+      }
+      if (!hits.length) {
+        console.log(`  ⚠️  ${t.name}: 未找到（锚点 ${t.anchor}，结构定位也未命中）`);
+        summary.extracted.push({ name: t.name, status: "not-found" });
+        continue;
+      }
     }
     // 同长度时优先选「真实 bundle」而非作者手工切出来的片段文件。
     // 判据：片段文件名通常带 -raw 后缀；真实 bundle 名形如 index-<hash>.js。
@@ -503,11 +724,31 @@ async function main() {
       );
     }
 
+    // ── verify 是最后一道关 ──
+    // 压缩产物里同名符号可能是完全无关的东西。实测：旧版的 Jo（身形表）在
+    // 新版包里命中了 React 的 `Jo={test:e=>e==="au"...}`，31 字节的无关函数。
+    // 匹配成功但 verify 失败时必须丢弃，不能落盘当结果——否则输出目录里
+    // 会混进一个看起来正常、实际是垃圾的 Jo.json。
+    const verified = t.verify ? t.verify(res.value) : res.ok;
+    if (!verified) {
+      const why = res.ok
+        ? `结构不符（${res.ok ? (Array.isArray(res.value) ? `array[${res.value.length}]` : typeof res.value) : "?"}，verify 未通过）`
+        : `无法转 JSON（${String(res.error || "").slice(0, 60)}）`;
+      console.log(`  ✗  ${t.name}: 命中 ${span[1] - span[0]} 字节但${why} → 丢弃`);
+      console.log(`       命中内容: ${JSON.stringify(exprText.slice(0, 80))}…`);
+      summary.extracted.push({
+        name: t.name, status: "rejected", reason: why,
+        bundle: whichBundle.path, byteRange: [span[0], span[1]], bytes: span[1] - span[0],
+        hitSample: exprText.slice(0, 200),
+      });
+      continue;
+    }
+
     const record = {
       name: t.name,
       kind: t.kind,
       desc: t.desc,
-      status: res.ok ? "ok" : "partial",
+      status: "ok",
       needsRuntime: /\bPo\s*\(/.test(exprText),
       bundle: whichBundle.path,
       byteRange: [span[0], span[1]],
@@ -515,12 +756,8 @@ async function main() {
       warnings,
     };
 
-    if (res.ok) {
-      let v = res.value;
-      if (t.verify && !t.verify(v)) {
-        record.status = "verify-failed";
-        warnings.push("内容形状与预期不符");
-      }
+    {
+      const v = res.value;
       record.json = v;
       if (Array.isArray(v)) record.shape = `array[${v.length}]`;
       else if (v && typeof v === "object") record.shape = `object{${Object.keys(v).length}}`;
@@ -528,10 +765,6 @@ async function main() {
       console.log(
         `  ✓  ${t.name}: ${record.shape}  → ${t.name}.json  (${(exprText.length / 1024).toFixed(1)}KB)${warnings.length ? "  ⚠️ " + warnings.join("; ") : ""}`
       );
-    } else {
-      record.raw = exprText;
-      await writeFile(path.join(outDir, `${t.name}.raw.js`), exprText);
-      console.log(`  ⚠️  ${t.name}: 无法直接转 JSON（${res.error}）→ ${t.name}.raw.js`);
     }
 
     summary.extracted.push(record);
@@ -541,6 +774,28 @@ async function main() {
   console.log(`\n▸ 扫描其他候选表`);
   const candidates = [];
   for (const b of bundles) {
+    // SVG path 常量（已烘焙的几何）：单独扫，因为它们不是「表」而是字符串字面量。
+    // 真实包里 12 个里有 11 个是 UI 图标（Google/Slack 品牌色一眼可辨），
+    // 只有紧跟眼睛表的那一个是角色几何。用 brandColors 标出可疑图标。
+    {
+      const svgHits = findSvgPathConstants(b.src);
+      for (const h of svgHits) {
+        candidates.push({
+          name: h.name,
+          kind: "svg-path",
+          hint: h.looksLikeIcon
+            ? `SVG path（坐标 ≤${h.maxAbs.toFixed(0)}，UI 图标${h.brandColors.length ? "：" + h.brandColors.join(",") : ""}）`
+            : `SVG path（坐标 ≤${h.maxAbs.toFixed(0)}，疑似角色几何）`,
+          bundle: b.path,
+          at: h.at,
+          len: h.len,
+          expr: JSON.stringify(h.path),
+          svgPath: h.path,
+          brandColors: h.brandColors,
+          looksLikeIcon: h.looksLikeIcon,
+        });
+      }
+    }
     for (const p of SCAN_PATTERNS) {
       p.re.lastIndex = 0;
       let m;
@@ -626,6 +881,20 @@ async function main() {
     for (const c of candidates) {
       // 尝试切段
       const b = bundles.find((x) => x.path === c.bundle);
+      // SVG path 候选：值本身就是字符串字面量，不走括号配对
+      if (c.kind === "svg-path") {
+        if (wantAll) {
+          await writeFile(
+            path.join(outDir, `candidate-${c.name}.svgpath.txt`),
+            c.svgPath
+          );
+        }
+        console.log(
+          `  · ${c.name}  [${c.hint}]  ${(c.len / 1024).toFixed(1)}KB${wantAll ? "  → 已导出" : ""}`
+        );
+        continue;
+      }
+
       const declIdx = b.src.indexOf(`${c.name}=`, c.at - 200 > 0 ? c.at - 200 : 0);
       let shape = "?";
       let ok = false;
