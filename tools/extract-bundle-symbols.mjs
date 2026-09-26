@@ -50,6 +50,57 @@ const TARGETS = [
     verify: (v) => v && typeof v === "object" && Object.keys(v).length >= 10,
   },
   {
+    // ── 真实 app.asar (Grok Bot v0.18.x) 里的名字 ──
+    // 眼睛表：`const Wt=[[[[130.36,45.98],...`
+    name: "Wt",
+    kind: "eyes",
+    desc: "眼睛多边形表（真实 app.asar 里的名字，等价于 u3）",
+    shape: "brackets",
+    anchor: /\bWt\s*=\s*\[\[/,
+    anchorOffset: 3,
+    verify: (v) => Array.isArray(v) && v.length >= 20 && Array.isArray(v[0]) && Array.isArray(v[0][0]),
+  },
+  {
+    // 色板：`cs=[{id:"black",label:"Black",value:"#000"},...]`
+    name: "cs",
+    kind: "palette",
+    desc: "色板（真实 app.asar 里的名字，等价于 snt；含 id/label/value）",
+    shape: "brackets",
+    anchor: /\bcs\s*=\s*\[\{/,
+    anchorOffset: 3,
+    verify: (v) => Array.isArray(v) && v.length >= 5 && v.every((x) => x && x.id && x.value),
+  },
+  {
+    // 渐变色板：`I3={black:{lightFrom,lightTo,darkFrom,darkTo},...}`（11 色 × 4 停靠点）
+    name: "I3",
+    kind: "palette-gradients",
+    desc: "渐变色板（真实 app.asar；每个色有 light/dark 两套渐变起止）",
+    shape: "brackets",
+    anchor: /\bI3\s*=\s*\{/,
+    anchorOffset: 3, // "I3={" 里 "{" 的下标
+    verify: (v) => v && typeof v === "object" && Object.keys(v).length >= 8,
+  },
+  {
+    // 完整身形名表（18 个，含 wedge/cloud 等）
+    name: "q1",
+    kind: "shape-names",
+    desc: "身形名列表（18 个）",
+    shape: "brackets",
+    anchor: /\bq1\s*=\s*\["/,
+    anchorOffset: 3,
+    verify: (v) => Array.isArray(v) && v.length >= 10,
+  },
+  {
+    // 另一组身形名（8 个，按是否支持某特性分组）
+    name: "bu",
+    kind: "shape-names",
+    desc: "身形名列表（8 个，子集）",
+    shape: "brackets",
+    anchor: /\bbu\s*=\s*\["/,
+    anchorOffset: 3,
+    verify: (v) => Array.isArray(v) && v.length >= 5,
+  },
+  {
     name: "snt",
     kind: "palette",
     desc: "11 色板（对象，key → 颜色值）",
@@ -72,22 +123,29 @@ const SCAN_PATTERNS = [
     verify: (v) => Array.isArray(v) && v.length >= 3 && v.every((x) => x.label && Array.isArray(x.states)),
   },
   {
-    name: "state-eye-map",
-    hint: "状态 → 眼睛多边形下标集合（解释 morph 目标）",
+    name: "index-map",
+    hint: "键 → 数字下标数组（结构匹配，语义需人工确认）",
     // {sleeping:[13,22,4],waking:[13],idle:[0,8],...}
     re: /\{[a-z][\w-]*:\[[\d,\s]*\](?:,[a-z][\w-]*:\[[\d,\s]*\]){5,}\}/g,
     verify: (v) => v && typeof v === "object" && Object.keys(v).length >= 6,
   },
   {
+    // 状态分类总表：4 类 39 个状态。这是 replica 里没有的关键数据。
+    name: "state-taxonomy",
+    hint: "状态分类总表（label + states）",
+    re: /\[\{label:"[^"]+",states:\[[^\]]*\]\}(?:,\{label:"[^"]+",states:\[[^\]]*\]\})+\]/g,
+    verify: (v) => Array.isArray(v) && v.length >= 3 && v.every((x) => x.label && Array.isArray(x.states)),
+  },
+  {
     name: "state-timings",
-    hint: "状态时长表（毫秒）",
+    hint: "键 → 整数/毫秒值（结构匹配，语义需人工确认）",
     // {progress:2500,spawning:2e3,...}
     re: /\{[a-z][\w-]*:(?:\d+e?\d*|null)(?:,[a-z][\w-]*:(?:\d+e?\d*|null)){4,}\}/g,
     verify: (v) => v && typeof v === "object" && Object.keys(v).length >= 5,
   },
   {
     name: "state-sequences",
-    hint: "状态序列（按类别分组的字符串数组）",
+    hint: "键 → 字符串数组（结构匹配，语义需人工确认）",
     re: /\{[a-z][\w-]*:\[[^\]]*\](?:,[a-z][\w-]*:\[[^\]]*\]){2,}\}/g,
     verify: (v) => v && typeof v === "object" && Object.keys(v).length >= 3,
   },
@@ -372,7 +430,12 @@ async function main() {
     await hdr.fh.close();
     process.exit(1);
   }
-  console.log(`  JS 文件: ${jsFiles.map((f) => `${f.path} (${(f.size / 1024).toFixed(0)}KB)`).join(", ")}`);
+  // 只列前 8 个 + 总数，避免大 app（500+ 文件）刷屏
+  {
+    const show = jsFiles.slice(0, 8).map((f) => `${f.path} (${(f.size / 1024).toFixed(0)}KB)`);
+    const more = jsFiles.length > show.length ? ` … 共 ${jsFiles.length} 个` : "";
+    console.log(`  JS 文件: ${show.join(", ")}${more}`);
+  }
 
   // 读全部 JS 到内存
   const bundles = [];
@@ -501,13 +564,28 @@ async function main() {
     }
   }
   // 已知的第三方库表（KaTeX 字体度量等），不是 bot 数据，过滤掉
-  const FP = /^(slant|space|stretch|shrink|xHeight|quad|extraSpace|num1|denom1|sup1|sub1|axisHeight|ruleThickness|defaultRuleThickness|bigOpSpacing|sqrtRuleThickness)$/;
+  // 已知第三方库表的指纹：命中就丢掉，避免污染结果
+  const LIB_SIGNS = [
+    // KaTeX 字体度量
+    /^(slant|space|stretch|shrink|xHeight|quad|extraSpace|num1|denom1|sup1|sub1|axisHeight|ruleThickness)$/,
+    // CSS 具名颜色表（148 项，值是 [r,g,b] 整数数组）：命中率高就丢掉
+    /^(transparent|aliceblue|antiquewhite|aqua|aquamarine|azure|beige|bisque|blanchedalmond|blueviolet|burlywood|cadetblue|chartreuse|chocolate|coral|cornflowerblue|cornsilk|crimson|darkcyan|darkgoldenrod|darkgray|darkgreen|darkkhaki|darkmagenta|darkolivegreen|darkorange|darkorchid|darkred|darksalmon|darkseagreen|darkslateblue|darkslategray|darkturquoise|darkviolet|deeppink|deepskyblue|dimgray|dodgerblue|firebrick|floralwhite|forestgreen|gainsboro|ghostwhite|goldenrod|greenyellow|honeydew|hotpink|indianred|indigo|ivory|khaki|lavender|lavenderblush|lawngreen|lemonchiffon|lightblue|lightcoral|lightcyan|lightgoldenrodyellow|lightgray|lightgreen|lightpink|lightsalmon|lightseagreen|lightskyblue|lightslategray|lightsteelblue|lightyellow|limegreen|linen|mediumaquamarine|mediumblue|mediumorchid|mediumpurple|mediumseagreen|mediumslateblue|mediumspringgreen|mediumturquoise|mediumvioletred|midnightblue|mintcream|mistyrose|moccasin|navajowhite|oldlace|olivedrab|orangered|orchid|palegoldenrod|palegreen|paleturquoise|palevioletred|papayawhip|peachpuff|peru|pink|plum|powderblue|rosybrown|royalblue|saddlebrown|salmon|sandybrown|seagreen|seashell|sienna|skyblue|slateblue|slategray|snow|springgreen|steelblue|tan|thistle|tomato|turquoise|violet|wheat|whitesmoke|yellowgreen)$/,
+    // PDF.js 图形算子
+    /^(dependency|setLineWidth|setLineCap|setLineJoin|setMiterLimit|setDash|setRenderingIntent|setFlatness|setGState|save|restore|transform|moveTo|lineTo|curveTo|curveTo2|curveTo3|closePath|rectangle|stroke|fill|eoFill|clip|eoClip|beginText|endText|setCharSpacing|setWordSpacing|setHScale|setLeading|setFont|setTextRenderingMode|setTextRise|showText|moveText|setLeadingMoveText|nextLine|paintXObject|markPoint|markPointProps|beginMarkedContent|endMarkedContent|beginCompat|endCompat|paintFormXObjectBegin|paintFormXObjectEnd|beginGroup|endGroup|beginAnnotations|endAnnotations)$/,
+    // 前端 IPC 方法注册表（值都是方法名数组，且 key 是 snake_case 领域词）
+    /^(transcript|widgets|approvals|roster|cloud_agents|listeners)$/,
+    // Tailwind 内部判定器
+    /^(isAny|isAnyNonArbitrary|isArbitraryValue|isArbitraryVariable|isFraction|isNumber|isInteger|isPercent|isTshirtSize|isNamedContainerQuery|isArbitraryLength|isArbitraryNumber|isArbitraryPosition|isArbitrarySize)$/,
+  ];
   for (let i = candidates.length - 1; i >= 0; i--) {
     const r = literalToJson(candidates[i].expr, []);
-    const keys = r.ok && r.value && typeof r.value === "object" && !Array.isArray(r.value)
-      ? Object.keys(r.value) : [];
-    if (keys.length && keys.filter((k) => FP.test(k)).length / keys.length > 0.5) {
-      candidates.splice(i, 1);
+    const val = r.ok ? r.value : null;
+    if (!val || typeof val !== "object" || Array.isArray(val)) continue;
+    const keys = Object.keys(val);
+    if (!keys.length) continue;
+    for (const re of LIB_SIGNS) {
+      const hit = keys.filter((k) => re.test(k)).length;
+      if (hit / keys.length > 0.3) { candidates.splice(i, 1); break; }
     }
   }
 
