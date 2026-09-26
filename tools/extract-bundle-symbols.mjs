@@ -511,6 +511,22 @@ async function main() {
     }
   }
 
+  // 去重：同一个表达式可能同时出现在真实 bundle 和作者的 -raw 片段里
+  {
+    const seen = new Map();
+    for (const c of candidates) {
+      const key = c.kind + "|" + c.len;
+      const prev = seen.get(key);
+      if (!prev) { seen.set(key, c); continue; }
+      // 同样长度同样类别，保留「非 -raw」的那个
+      const better = /-raw\./.test(c.bundle) ? prev : c;
+      candidates[candidates.indexOf(better === c ? prev : c)] = better;
+    }
+    const uniq = [...new Set(candidates)];
+    candidates.length = 0;
+    candidates.push(...uniq);
+  }
+
   // 同 kind 只留最长的 3 个，避免刷屏
   const byKind = new Map();
   for (const c of candidates) {
