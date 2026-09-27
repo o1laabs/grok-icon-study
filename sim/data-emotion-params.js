@@ -1,0 +1,62 @@
+export default {
+ "angry": {
+  "gap": 1.28,
+  "size": 0.78,
+  "eyeWidth": 0.88,
+  "eyeHeight": 0.84
+ },
+ "suspicious": {
+  "gap": 1.24,
+  "size": 0.82,
+  "eyeWidth": 0.9
+ },
+ "confused": {
+  "gap": 1.2,
+  "size": 0.84,
+  "eyeWidth": 0.9
+ },
+ "scared": {
+  "size": 0.8,
+  "eyeWidth": 0.9,
+  "eyeHeight": 0.88
+ },
+ "surprised": {
+  "size": 0.76,
+  "eyeWidth": 0.86,
+  "eyeHeight": 0.86
+ },
+ "excited": {
+  "size": 0.78,
+  "eyeWidth": 0.88,
+  "eyeHeight": 0.88
+ },
+ "celebrate": {
+  "size": 0.74,
+  "eyeWidth": 0.84,
+  "eyeHeight": 0.84
+ },
+ "happy": {
+  "size": 0.76,
+  "eyeWidth": 0.86,
+  "eyeHeight": 0.84
+ },
+ "curious": {
+  "size": 0.84
+ },
+ "drowsy": {
+  "size": 0.92,
+  "eyeWidth": 0.96
+ },
+ "bored": {
+  "size": 0.92,
+  "eyeWidth": 0.96
+ },
+ "sad": {
+  "size": 0.92,
+  "eyeWidth": 0.96
+ },
+ "playful": {
+  "size": 0.84,
+  "gap": 1.2
+ }
+};
