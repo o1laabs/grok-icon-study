@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Grok Bot 情绪模拟器</title>
+<style>
+  :root{--bg:#0b0b0f;--fg:#e8e8f0;--dim:#6b6b7b;--accent:#c8b6ff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--fg);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"PingFang SC",sans-serif;
+       min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:18px 14px 40px;gap:16px}
+  h1{font-size:15px;font-weight:600;letter-spacing:.02em;color:var(--fg)}
+  h1 span{color:var(--dim);font-weight:400}
+  #wrap{position:relative;width:min(92vw,380px);aspect-ratio:1;border-radius:26px;
+        background:radial-gradient(circle at 50% 38%,#1a1726 0%,#0d0c13 68%);overflow:hidden;
+        box-shadow:0 0 0 1px #ffffff10,0 22px 60px -18px #000}
+  #stage{width:100%;height:100%;display:block}
+  #cur{position:absolute;left:50%;transform:translateX(-50%);bottom:12px;font-size:11px;
+       letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+  #grid{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;width:min(94vw,440px)}
+  #grid button{background:#16151f;border:1px solid #ffffff12;color:#a9a9bd;
+       font-size:11px;padding:5px 10px;border-radius:999px;cursor:pointer;
+       font-family:inherit;transition:.14s}
+  #grid button:hover{border-color:#ffffff30;color:#e8e8f0}
+  #grid button.on{background:var(--accent);border-color:var(--accent);color:#141020;font-weight:600}
+  .note{color:var(--dim);font-size:11px;text-align:center;max-width:440px;line-height:1.7}
+  .grp{width:100%;max-width:440px}
+  .grp h2{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#4d4d5c;margin:10px 0 6px}
+</style>
+</head>
+<body>
+  <h1>Grok Bot 情绪模拟器 <span>· 引擎移植自真实 app.asar</span></h1>
+  <div id="wrap">
+    <svg id="stage" viewBox="0 0 420 420"></svg>
+    <div id="cur">idle</div>
+  </div>
+  <div class="grp"><h2>状态（39 个，全部来自真实 m6 表）</h2></div>
+  <div id="grid"></div>
+  <p class="note">
+    数据：<code>Wt</code> 25 组眼睛多边形 · <code>Kr</code> 状态→眼睛序列 · <code>x6</code> 情绪几何参数<br>
+    算法：PCA 主轴对齐插值（<code>ji</code>）· 圆角形状生成（<code>Ta</code>）· 简谐弹簧
+  </p>
+  <svg width="0" height="0" style="position:absolute"><defs>
+    <radialGradient id="bd" cx="42%" cy="30%">
+      <stop offset="0%" stop-color="#4b4270"/>
+      <stop offset="62%" stop-color="#2b2547"/>
+      <stop offset="100%" stop-color="#161228"/>
+    </radialGradient>
+    <radialGradient id="ey" cx="45%" cy="35%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e6e3f5"/>
+    </radialGradient>
+    <filter id="gl"><feGaussianBlur stdDeviation="2.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs></svg>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
